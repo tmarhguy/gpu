@@ -1,0 +1,3 @@
+TEX2D r4, r0
+OUT 0, r4
+END

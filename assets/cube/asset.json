@@ -1,0 +1,10 @@
+{
+  "vertices": 24,
+  "indices": 36,
+  "triangles": 12,
+  "texture": [
+    256,
+    256
+  ],
+  "format": "8 signed Q6.12 lanes, position normal uv; lane0 least significant"
+}

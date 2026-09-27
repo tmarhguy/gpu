@@ -1,0 +1,8 @@
+iverilog -g2012 -Wall -DPINEAPPLE_SIM -s tb_board -o build/tb_board rtl/board/clock_reset.v rtl/board/dvi_out.v rtl/board/gpu_scanout.v rtl/board/keypad.v rtl/pineapple_top.v tb/tb_board.v
+vvp build/tb_board
+PASS board: two frames, RGB, porch/sync, blank pulse, reset
+tb/tb_board.v:43: $finish called at 33600416000 (1ps)
+iverilog -g2012 -Wall -DPINEAPPLE_SIM -s tb_keypad -o build/tb_keypad rtl/board/keypad.v tb/tb_keypad.v
+vvp build/tb_keypad
+PASS keypad: bounce, center one-shot, arrow repeat, chord levels
+tb/tb_keypad.v:29: $finish called at 3260000 (1ps)

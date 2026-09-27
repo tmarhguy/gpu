@@ -1,0 +1,15 @@
+Warning: [current_design] isn't supported, ignoring (on line 3)
+Warning: [current_design] isn't supported, ignoring (on line 4)
+Info: 	          SLICE_LUTX:   192/126800     0%
+Info: 	           SLICE_FFX:    99/126800     0%
+Info: 	            RAMB36E1:     0/  135     0%
+Info: 	             DSP48E1:     0/  240     0%
+Info: Max frequency for clock 'clocks.clk': 724.11 MHz (PASS at 100.00 MHz)
+Info: Max frequency for clock    'pix_clk': 201.73 MHz (PASS at 100.00 MHz)
+Info: Max frequency for clock 'clocks.clk': 981.35 MHz (PASS at 100.00 MHz)
+Info: Max frequency for clock    'pix_clk': 218.58 MHz (PASS at 100.00 MHz)
+/Users/tmarhguy/Documents/GitHub/tomato/hardware/fpga/.tools/prjxray-venv/lib/python3.11/site-packages/fasm/parser/__init__.py:30: RuntimeWarning: Unable to import fast Antlr4 parser implementation.
+wrote build/pineapple_top.bit
+openFPGALoader -b nexys_a7_100 build/pineapple_top.bit
+Jtag frequency : requested 6.00MHz    -> real 6.00MHz   
+Error: no device found

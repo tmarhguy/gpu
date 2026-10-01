@@ -11,6 +11,23 @@ pineapple (`make program`) and the cube (`make program-cube`, unchanged GPU RTL)
 have rendered on silicon. The bring-up test pattern is preserved as
 `rtl/board/bringup_top.v` for diagnostics.
 
+## Demo
+
+<p align="center">
+  <img src="media/videos/pineapple-demo.gif" width="70%" alt="Pineapple demo on the Nexys A7-100T, sped up 2x">
+</p>
+
+Pineapple asset rendering on silicon, captured over DVI and sped up 2x
+(source clip: `media/videos/pineapple-demo.mp4`, still:
+`media/screenshots/pineapple-on-silicon.png`).
+
+Before the GPU first rendered, the DVI path was validated with a
+red/green/blue/white band test pattern:
+
+<p align="center">
+  <img src="media/screenshots/bringup-test-pattern.png" width="70%" alt="DVI bring-up test pattern">
+</p>
+
 ## Build and run
 
 ```

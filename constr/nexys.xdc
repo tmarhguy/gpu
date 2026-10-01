@@ -1,5 +1,17 @@
-## Tomato — Nexys A7-100T (xc7a100tcsg324-1)
-## Top: pineapple_top. Video leaves on the 12-bit DVI PMOD across JC + JD.
+## Pineapple GPU P1 — Nexys A7-100T (xc7a100tcsg324-1)
+## Top: pineapple_top (cube_top wraps it with ASSET=cube/INDEX_COUNT=36).
+## Video leaves on the 12-bit TFP410 DVI PMOD across JC + JD.
+## Clocks (rtl/board/clock_reset.v): 100 MHz E3 -> div/2 gpu_clk 50 MHz
+## (GPU, host, keypad, UART) + div/4 pix_clk 25 MHz (scanout, DVI), each BUFG.
+## CDC: render_target request/ack is 2-flop synced both ways and swaps only at
+## vblank_start; buttons/UART RX are 2-flop synced at their receivers; resets
+## are async-assert/sync-release per domain. nextpnr-xilinx takes --freq 50
+## for timing and warns on the two [current_design] lines below; they are for
+## Vivado. The Vivado-only CDC exceptions are kept as comments so the FOSS
+## flow never has to parse them:
+##   set_false_path -from [get_ports {btnu btnd btnl btnr btnc RsRx cpu_resetn}]
+##   set_false_path -from [get_clocks -of_objects [get_pins clocks/div_reg*]] -to ...
+##   (gpu_clk -> pix_clk req_sync[*], pix_clk -> gpu_clk ack_sync[*])
 set_property CFGBVS VCCO [current_design]
 set_property CONFIG_VOLTAGE 3.3 [current_design]
 

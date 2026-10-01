@@ -1,0 +1,50 @@
+== Introduction
+
+This chapter introduces the project, its goals, and how this manual is organized.
+It distills the repository `README.md`, the frozen P1 brief
+(`docs/p1-specification.md`), `docs/milestones.md`, and `docs/provenance.md`.
+
+=== Purpose
+
+Pineapple GPU P1 is a standalone programmable 3D graphics processor for the
+Nexys A7-100T (`xc7a100tcsg324-1`).
+It renders indexed triangle meshes — textured, lit, depth-tested — with a
+programmable vertex stage and a programmable fragment stage.
+
+The textured pineapple is the first showcase workload, not the architecture:
+the same GPU RTL renders the cube asset with no GPU changes
+(`rtl/cube_top.v` is parameters only).
+There is no CPU, no DDR, no flash image; `make program` loads volatile SRAM only.
+
+=== Scope of this manual
+
+* <<_architecture,Architecture>> — system map: every diagram box to file, clock, and width.
+* <<_design_microarchitecture,Design>> — pipeline stages and RTL organization.
+* <<_interfaces,Interfaces>> — PineBus register contract.
+* <<_programming_model,Programming model>> — shader ISA, number formats, runtime upload.
+* <<_verification,Verification>> — testbenches, golden model, silicon evidence.
+* <<_implementation,Implementation>> — FPGA flow, clocks, pins, resources.
+* <<_performance,Performance>> — measured cycles and frame rates.
+* <<_known_limitations,Known limitations>> — honest gaps and next steps.
+
+Legacy Markdown sources under `docs/*.md` are preserved alongside this manual;
+this manual is the central, cross-linked reference.
+
+=== Conventions
+
+Inline `code` denotes RTL identifiers, register names, and file paths.
+Source listings state their language explicitly:
+
+[source,sh]
+----
+make test     # fast unit suites (Icarus)
+make verify   # pixel-exact RTL-vs-reference frames (minutes)
+make fpga
+make program
+----
+
+NOTE: Timing and frame-rate numbers in this manual are _measured_, never promised.
+Each cites the build, date, and conditions under which it was taken.
+
+TIP: Start with <<_architecture,Architecture>> for the one-page contract,
+then <<_programming_model,Programming model>> if you write shaders.

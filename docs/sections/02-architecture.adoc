@@ -1,0 +1,131 @@
+[#_architecture]
+== Architecture
+
+System-level contract for the Nexys A7-100T.
+Source of truth: `rtl/`, `constr/nexys.xdc`, `docs/architecture.md`.
+
+=== System overview
+
+PineBus command submission → indexed vertex fetch → programmable vertex
+shader → primitive assembly, cull, and setup → top-left edge rasterizer →
+perspective interpolation → early depth test → programmable fragment shader
+and texture unit → RGB444 back buffer → vblank presentation → board scanout.
+
+`rtl/gpu/` holds the graphics processor and never knows board pins or asset
+identity.
+`rtl/board/` owns clocks, buttons, timing, and DVI pins.
+`rtl/host/` (demo FSM plus camera) is the first PineBus host; a future host
+replaces it without touching `rtl/gpu/`.
+
+=== Clock domains
+
+All GPU logic runs on `gpu_clk` (50 MHz).
+All scanout logic runs on `pix_clk` (25 MHz).
+The only crossing is the framebuffer swap plus scanout read.
+
+[source,text]
+----
+NEXYS A7-100T (xc7a100tcsg324-1), 100 MHz E3 -+- div/2 -> gpu_clk 50 MHz (GPU, host, keypad, UART)
+                                               +- div/4 -> pix_clk 25 MHz (scanout, DVI, vblank)
+----
+
+=== System map
+
+Every diagram node maps to exact files, clocks, and widths.
+
+[cols="1,2,1,3",options="header"]
+|===
+| Node | RTL | Domain | Notes
+
+| Five buttons
+| `rtl/board/keypad.v`, `rtl/host/camera_controller.v`
+| `gpu_clk`
+| 2-flop sync, ~1.31 ms tick, ~16 ms debounce. Outputs `yaw/pitch/zoom/mode`. Pins N17 C, M18 U, P18 D, P17 L, M17 R.
+
+| Demo / host controller
+| `rtl/host/demo_host.v`
+| `gpu_clk`
+| Per-frame PineBus program: `INDEX_COUNT`, clear color, uniforms, `CLEAR -> DRAW_INDEXED -> PRESENT`. `hold` freezes it during shader upload.
+
+| PineBus commands
+| `rtl/gpu/pineapple_gpu.v`
+| `gpu_clk`
+| `addr/wdata/write/valid -> ready`. Writes commit only while idle. See <<_interfaces,Interfaces>>.
+
+| Command processor
+| `pineapple_gpu.v` states 0/1/40/41/42
+| `gpu_clk`
+| Folded into the GPU FSM. `CLEAR` fills color and depth; `DRAW_INDEXED` validates count; `PRESENT` handshakes the swap.
+
+| Vertex / index RAM
+| `pineapple_gpu.v`
+| `gpu_clk`
+| `index_mem[16384]`, `vertex_mem[2048]`. 2-cycle fetch, bounds-checked; violations raise `error`.
+
+| Programmable vertex core
+| `rtl/gpu/shader_core.v`
+| `gpu_clk`
+| Shared Pine core, ~5 cycles per instruction. See <<_programming_model,Programming model>>.
+
+| Primitive, clip, cull
+| `pineapple_gpu.v` states 5/8/9/13
+| `gpu_clk`
+| `w` clip kill, viewport reject, zero-area kill, cull-gated backface kill, CCW repair.
+
+| Triangle setup
+| `pineapple_gpu.v` + `rtl/gpu/reciprocal.v`
+| `gpu_clk`
+| 32-cycle restoring divider, per-vertex `q`, viewport map, 16-bit depth.
+
+| Rasterizer
+| `rtl/gpu/rasterizer.v`
+| `gpu_clk`
+| Pixel-center edge walker, top-left fill rule, bbox clamped to 320x180.
+
+| Interpolator
+| `pineapple_gpu.v` states 21/22/36/23
+| `gpu_clk`
+| 7 attributes, one component per 3-cycle pass (~21 cycles per fragment).
+
+| Texture RAM
+| `rtl/memory/texture_mem.v`
+| `gpu_clk`
+| 256x256 RGB444, 4 texels per word, 2-cycle read.
+
+| Programmable fragment core
+| `shader_core.v` + `shader_loader.v` + `uart_rx.v`
+| `gpu_clk`
+| Same core reused per fragment. Runtime upload over USB-UART.
+
+| Depth test (early Z)
+| `pineapple_gpu.v` states 24/31
+| `gpu_clk`
+| Nearer wins, clear is far (`0xFFFF`). Single fragment in flight, no Z hazard.
+
+| Double framebuffer
+| `rtl/memory/render_target.v`
+| `gpu_clk` + `pix_clk`
+| Two 57,600x12 banks. `PRESENT` swaps at `vblank_start` only via 2-flop CDC.
+
+| Scanout
+| `rtl/board/gpu_scanout.v`
+| `pix_clk`
+| 800x525 timing, pixel-doubled 640x360 centered in 640x480. Output 59.524 Hz.
+
+| DVI output
+| `rtl/board/dvi_out.v`
+| `pix_clk`
+| 12-bit payload registered, clock forwarded through `ODDR`. JC/JD PMOD.
+|===
+
+Second-asset proof: `rtl/cube_top.v` is parameters only (`ASSET`, `INDEX_COUNT`).
+`rtl/gpu/` is untouched between pineapple and cube builds.
+
+[#_fig-scanout]
+.Figure: bring-up test pattern produced by `rtl/board/bringup_top.v`.
+image::bringup-test-pattern.png[Bring-up test pattern,align="center"]
+
+WARNING: The brief sketches 13 discrete stage modules.
+The as-built RTL folds 7 of them into `pineapple_gpu.v`'s sequential FSM.
+Function is complete; modularity is the documented P2 step.
+See <<_known_limitations,Known limitations>>.

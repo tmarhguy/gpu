@@ -1,0 +1,118 @@
+[#_interfaces]
+== Interfaces
+
+PineBus is the whole host contract: one 32-bit register per idle-window write,
+plus combinatorial status and counter reads.
+Source of truth: `rtl/gpu/pineapple_gpu.v` (reads) and `rtl/host/demo_host.v`
+(the only writer).
+
+=== Handshake
+
+`write + valid -> ready`; writes commit *only while the GPU is idle*
+(`ready = (state==0) || read`).
+Reads are combinatorial and always ready; there is no read handshake.
+`demo_host` freezes its stream on `hold` during shader-upload commits so no
+command double-issues.
+
+=== Control and geometry registers
+
+[cols="1,2,1,3",options="header"]
+|===
+| Addr | Name | Bits | Meaning
+
+| `0x00`
+| STATUS (read)
+| `{30'b0, error, busy}`
+| `busy = state!=0`; `error` sticks until reset. Writes have no effect.
+
+| `0x04`
+| CLEAR_COLOR
+| `[11:0]` RGB444
+| Written every frame by the demo host. Showcase uses grape-dark blue `0x013`.
+
+| `0x08`
+| VERTEX_BASE
+| `[10:0]`
+| Word base into `vertex_mem[2048]`. Currently 0.
+
+| `0x0C`
+| INDEX_BASE
+| `[13:0]`
+| Word base into `index_mem[16384]`. Currently 0.
+
+| `0x10`
+| INDEX_COUNT
+| `[13:0]`
+| 3216 (pineapple), 36 (cube). Must be a multiple of 3 with `base+count <= 16384`, else `error` and DRAW aborts.
+
+| `0x14`
+| VS_PROGRAM
+| `[8:0]`
+| Vertex program slot base (words, 0..511). Currently 0.
+
+| `0x18`
+| FS_PROGRAM
+| `[8:0]`
+| Fragment slot: 64/128/…/384 for modes 0..5. Driven by D-pad mode.
+
+| `0x1C`
+| CULL
+| `[0]`
+| Write-only backface-culling enable. Not readable.
+
+| `0x50`
+| COMMAND
+| `wdata`
+| `1`=CLEAR (fill color plus `0xFFFF` depth), `2`=DRAW_INDEXED, `3`=PRESENT (vblank swap). Anything else raises `error`.
+|===
+
+=== Uniform window (write-only)
+
+Any address with `addr[15:8]==1` writes one S18 lane:
+
+[source,verilog]
+----
+u{addr[3:2]}[addr[7:4]] <= wdata[17:0];  // 16 vec4 uniforms u0..u3[0..15]
+----
+
+The demo host fills the 4 MVP rows as `0x100+component*4` (16 words per frame
+from `assets/camera.mem`) plus light and ambient constants at
+`0x140/0x144/0x148/0x14C`.
+Shader `LDU` reads the addressed vec4.
+
+=== Counters (read-only, reset-cleared)
+
+[cols="1,2,3",options="header"]
+|===
+| Addr | Name | Counts
+
+| `0x20`
+| FRAMES
+| Presented frames
+
+| `0x24`
+| FRAME_CYCLES
+| `gpu_clk` cycles in the last frame (host overhead included)
+
+| `0x28` / `0x2C` / `0x30` / `0x34`
+| VERTICES / TRIANGLES / CULLED / RASTERIZED
+| Geometry flow
+
+| `0x38` / `0x3C` / `0x40`
+| FRAGMENTS / KILLED / SHADED
+| Early-Z kills versus shaded
+
+| `0x44` / `0x48`
+| TEXTURE_REQUESTS / INSTRUCTIONS
+| `TEX2D` executions / shader instructions retired
+
+| `0x4C`
+| PROG_LOADS
+| Committed UART shader uploads
+|===
+
+Unmapped reads return 0.
+There is no interrupt, no DMA, no burst — by design.
+
+TIP: `FRAME_CYCLES` plus the geometry and shading counters is how
+<<_performance,Performance>> attributes bottlenecks instead of guessing.

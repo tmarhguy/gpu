@@ -1,0 +1,63 @@
+[#_performance]
+== Performance
+
+Measured frame loop at 50 MHz (`frame_cycles`, host overhead included).
+Pose- and mode-dependent — fps is a measurement, not a spec.
+
+=== Frame table (Icarus 13.0, 2026-10-01)
+
+[cols="3,1,1,3",options="header"]
+|===
+| Workload | Cycles | fps | Notes
+
+| cube yaw 0, mode 0 (diffuse)
+| 1,359,877
+| 36.8
+| face-on: 9,120 of 18,240 fragments early-Z killed
+
+| cube yaw 5, mode 0 (diffuse)
+| 1,835,013
+| 27.2
+| 14,052 shaded x ~11 instr
+
+| cube yaw 5, mode 1 (normal)
+| 1,409,029
+| 35.5
+| 14,052 shaded x ~5 instr
+
+| cube yaw 5, mode 2 (toon)
+| 1,835,013
+| 27.2
+| same cost class as diffuse
+
+| cube yaw 5, modes 3/4/5
+| 1.20–1.28 M
+| 39–42
+| cheapest shaders
+
+| pineapple showcase
+| 1,998,853
+| 25.0
+| 1,072 tris, 12,780 shaded x ~14 instr
+|===
+
+Hardware `PRESENT` can add up to one 16.7 ms vblank wait on top.
+30 fps is a measured target, never a guarantee.
+
+=== Bottleneck attribution (pineapple frame)
+
+From counters plus FSM latencies:
+
+* Shader execution ~45% (179,172 instr x ~5 cycles — irreducible, it is the workload).
+* *Divider-blocked reciprocal waits ~27%* (16k fragment + 3.2k vertex + 1k setup waits x 32 cycles; `CLEAR` is a fixed 57,600).
+* Serial interpolation ~17% (7 attributes x 3 cycles x 16,165 fragments).
+* Raster stepping and host overhead the rest.
+* Early-Z kills 3,385 fragments before shading — without it the frame would cost ~25% more.
+
+TIP: One structural win clears 30 fps: a pipelined reciprocal (2-cycle
+throughput instead of 32-cycle blocking) removes ~0.5 M cycles, giving
+pineapple ≈1.5 M ≈ 33 fps.
+It is provably bit-exact because every numerator is a site constant
+(`2^24` for `q`, `2^30` for `1/area`) — only denominators vary over
+enumerable ranges, so exhaustive equivalence simulation is feasible.
+Interpolation widening (~−11%) is the second lever, not the first.

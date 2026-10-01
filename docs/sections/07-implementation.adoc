@@ -1,0 +1,63 @@
+[#_implementation]
+== Implementation
+
+How the design is turned into a bitstream and what it costs.
+Target is fixed: `xc7a100tcsg324-1` on the Nexys A7-100T.
+
+=== Toolchain
+
+Yosys synthesis → nextpnr-xilinx place-and-route → Project X-Ray bitstream,
+reusing the installed Tomato `hardware/fpga/common.mk` flow in place
+(`TOMATO_FPGA` override; see root `README.md`).
+No Vivado, no CPU firmware, no copied toolchain, no destructive setup targets.
+
+[source,sh]
+----
+make fpga          # synthesize + route TOP=pineapple_top
+make program       # load volatile FPGA SRAM (no flash image)
+make fpga-cube     # same flow with TOP=cube_top
+make program-cube
+----
+
+Synthesis uses `-nodsp`: the installed nextpnr-xilinx cannot reliably route
+the mapped DSP carry ports, so 18x18 multiplies stay in fabric by choice, not
+by accident. Widths are unchanged, so timing — not function — is affected.
+
+=== Clocks and reset
+
+100 MHz oscillator on E3 → `rtl/board/clock_reset.v` → divided `gpu_clk`
+50 MHz (GPU, host, keypad, UART) and `pix_clk` 25 MHz (scanout, DVI),
+distributed with `BUFG`.
+Reset is asserted asynchronously and released synchronously with the pixel
+clock running (`CPU_RESETN` on C12).
+
+The fabric-divided clocks are proven but fragile (~0.7% margin on the
+pineapple build below). Moving to Vivado/MMCM is the first
+timing-robustness upgrade, not a functional one.
+
+=== Pins
+
+Clock, reset, five D-pad buttons, USB-UART `RsRx` on C4, and 12-bit TFP410
+DVI PMOD across JC/JD only (`constr/nexys.xdc`).
+Unused peripheral constraints from the Tomato source are excluded; see
+`docs/provenance.md`.
+
+=== Resources (measured post-route, never bit-counted)
+
+Payload alone is 3,090,432 bits (2x 57,600x12 color + 57,600x16 depth +
+65,536x12 texture ≈ 84 RAMB36 at ideal packing).
+Port width and depth rounding plus index, vertex, shader, uniform, and camera
+tables cost the rest.
+
+Measured v0.2.0: *22% LUT, 42% RAMB18, 41% RAMB36* of the 100T's 135 RAMB36.
+Any capacity claim must cite a post-route report, never a bit total.
+
+=== Timing (measured post-route)
+
+* Pineapple `make fpga`: `gpu_clk` *50.36 MHz* vs 50 MHz target;
+  `pix_clk` 151.10 MHz.
+* Cube `make fpga-cube`: `gpu_clk` 60.88 MHz, `pix_clk` 120.32 MHz.
+* Pineapple rebuild after parameter plumbing: `gpu_clk` 55.43 MHz.
+
+CAUTION: Only the post-route number gates.
+Pre-route estimates (e.g. 40.03 MHz seen once) are informational.

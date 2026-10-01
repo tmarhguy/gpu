@@ -1,0 +1,33 @@
+= Pineapple GPU P1 Technical Reference Manual
+:toc: left
+:toclevels: 3
+:sectnums:
+:sectnumlevels: 3
+:icons: font
+:source-highlighter: rouge
+:docinfo: shared
+:docinfodir: theme
+:imagesdir: images
+:stem: latexmath
+:experimental:
+:revnumber: 0.3.0
+:revdate: 2026-10-01
+
+This manual is the detailed technical reference for this project.
+The repository root `README.md` remains the concise project overview;
+everything normative about architecture, interfaces, programming,
+verification, and implementation lives here.
+
+Sections are assembled from `sections/` with `include::` directives.
+To add, delete, rename, or reorder a chapter, edit the include list
+below and the files under `sections/` — no theme or build changes needed.
+
+include::sections/01-introduction.adoc[]
+include::sections/02-architecture.adoc[]
+include::sections/03-design.adoc[]
+include::sections/04-interfaces.adoc[]
+include::sections/05-programming-model.adoc[]
+include::sections/06-verification.adoc[]
+include::sections/07-implementation.adoc[]
+include::sections/08-performance.adoc[]
+include::sections/09-limitations.adoc[]

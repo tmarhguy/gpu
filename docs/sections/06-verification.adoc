@@ -1,0 +1,88 @@
+[#_verification]
+== Verification
+
+What has actually been checked, with what, and what remains open.
+Evidence lives in `tb/`, `tools/`, and `docs/validation/`.
+
+=== Test layers
+
+* `make test` — fast unit suites (Icarus): board frames, keypad, camera
+  control, framebuffer CDC and vblank swap, reciprocal divider, DRAW-error
+  path, 96 randomized shader programs versus the integer reference,
+  24 rasterizer triangles under randomized backpressure, UART bytes/framing/
+  staging and a wired upload.
+* `make verify` — pixel-exact full-pipeline check (minutes): every RTL frame
+  must match the integer golden model with zero mismatched pixels out of
+  57,600: cube shader modes 0–5 (yaw 5) plus the 1072-triangle pineapple
+  showcase (reference CRC = RTL CRC = `63134D29`).
+* `make fpga` / `make program` — synthesis, place-and-route, timing, and
+  on-silicon HDMI confirmation (see <<_implementation,Implementation>>).
+
+[source,sh]
+----
+make test     # fast unit suites (Icarus)
+make verify   # pixel-exact RTL-vs-reference frames (minutes)
+----
+
+=== Golden model
+
+`tools/reference_renderer.py` is integer-only and bit-exact with RTL —
+`[s18, mul, edge, project]` must be read as the specification, not as an
+approximation.
+`tools/check_frame.py` compares RTL frame dumps against it (CRC plus mismatch
+count); `tools/generate_tests.py` produces the randomized shader and raster
+vectors.
+
+=== Silicon evidence (v0.2.0 and v0.3.0)
+
+* v0.2.0: `make test` 8/8 PASS; `make verify` PASS (cube modes 0–5 and
+  pineapple, zero mismatches); `make fpga` PASS at 50 MHz post-route
+  (`gpu_clk` 50.36 MHz); `make program` PASS, DONE set.
+* v0.3.0: `rtl/gpu/` untouched; cube build PASS at 50 MHz post-route
+  (`gpu_clk` 60.88 MHz); `make program-cube` PASS with matching
+  mode-0 yaw-0 frame (CRC `641A94BF`, 0 mismatches); pineapple rebuilt and
+  re-confirmed on screen.
+* 2026-10-01 re-verification (Icarus 13.0, Apple Silicon): `make test` PASS
+  (all 9 binaries), `make verify` PASS (showcase CRC `63134D29`, 1,998,853
+  cycles; cube modes 0–5 CRC-matched).
+
+[#_fig-pineapple-silicon]
+.Figure: lit textured pineapple on silicon (HDMI capture).
+image::pineapple-on-silicon.png[Lit pineapple on silicon,align="center"]
+
+Logs: `docs/validation/icarus.log`, `docs/validation/fpga-summary.log`.
+Photos: `docs/validation/hardware-pineapple.jpg`,
+`docs/validation/hardware-cube.jpg`.
+
+=== Bench sessions A1/A2 — pending
+
+Builds: `make program` (pineapple), `make program-cube` (cube).
+
+[cols="1,1,2,2,1,1",options="header"]
+|===
+| # | Build | Input | Expected | Photo | Result
+
+| 1 | pineapple | power-on boot | lit textured pineapple on `0x013` | |
+| 2 | pineapple | RIGHT x3 | yaw steps, matches sim poses | |
+| 3 | pineapple | UP x2 | pitch steps, matches sim poses | |
+| 4 | pineapple | CENTER+UP / CENTER+DOWN | zoom in / out | |
+| 5 | pineapple | CENTER tap modes 0–5 | 0 diffuse, 1 normal, 2 toon, 3 unlit, 4 uv, 5 depth | |
+| 6 | cube | boot + RIGHT x2 + modes 0,1 | same behavior, cube asset | |
+|===
+
+Live shader upload:
+
+[cols="1,3,3,1",options="header"]
+|===
+| # | Step | Expected | Result
+
+| 1 | mode 2 selected, `python3 tools/pineload.py shaders/flat.frag --mode 2`
+| flat-shaded frame, no resynthesis or reboot |
+| 2 | CENTER-tap away and back to mode 2
+| upload persists in its slot |
+| 3 | `0x4C` PROG_LOADS before/after
+| +1, `error` flag clear |
+|===
+
+NOTE: Any photo diverging from the sim-predicted frame is a P1 defect:
+record the mode, yaw, and reference CRC alongside it.

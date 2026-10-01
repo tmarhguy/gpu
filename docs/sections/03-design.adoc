@@ -1,0 +1,61 @@
+[#_design_microarchitecture]
+== Design / microarchitecture
+
+How the pipeline is actually built.
+Files named here are the specification; comments in RTL resolve any ambiguity.
+
+=== Pipeline dataflow
+
+[source,text]
+----
+CLEAR / DRAW_INDEXED / PRESENT (PineBus)
+  -> index fetch (states 2/3) -> vertex shade -> clip/cull/viewport
+  -> setup (reciprocal) -> rasterize -> interpolate -> early-Z
+  -> fragment shade (+TEX2D) -> color+Z write -> PRESENT (vblank swap)
+----
+
+Only one vertex or fragment is in flight at a time, except at the
+rasterizer boundary, which uses `ready/valid` backpressure.
+Throughput claims about "`one fragment per cycle`" refer to the rasterizer's
+generation rate, not the pipeline's consumption rate.
+
+=== Key modules
+
+* `rtl/gpu/pineapple_gpu.v` — command processor, fetch, clip/cull/setup,
+  interpolator, depth, and PRESENT handshake (one large FSM).
+* `rtl/gpu/shader_core.v` — shared programmable core used by both stages,
+  selected by `program_base`.
+* `rtl/gpu/rasterizer.v` — standalone edge walker with `busy/done` bracketing.
+* `rtl/gpu/reciprocal.v` — 32-cycle restoring divider for `1/w` and `1/area`.
+* `rtl/gpu/shader_loader.v`, `rtl/board/uart_rx.v` — staged, checksummed,
+  atomic-between-frames shader upload.
+* `rtl/memory/render_target.v` — dual-bank framebuffer with vblank-only swap.
+* `rtl/memory/texture_mem.v` — 256x256 RGB444 texture ROM.
+* `rtl/host/demo_host.v` — per-frame PineBus program (uniforms, shaders,
+  clear, draw, present); `hold` input freezes it during upload commits.
+* `rtl/host/camera_controller.v` — D-pad orbit, pitch, zoom chord, shader-mode cycle.
+* `rtl/board/` — `clock_reset.v`, `keypad.v`, `gpu_scanout.v`, `dvi_out.v`,
+  plus preserved `bringup_top.v` diagnostics.
+
+=== Fixed-point and raster math
+
+Full formats live in <<_programming_model,Programming model>>.
+The pipeline-relevant rules:
+
+* Clip: `w < 512/4096` kills (behind/near guard).
+* Screen: `x = 160+((px*160)>>24)`, `y = 90-((py*90)>>24)`; reject outside ±1024.
+* Depth: `(pz*q)>>8` clamped to `0…65535`; clear `0xFFFF` is far; nearer wins, equal fails.
+* Edge functions evaluated at pixel centers with the top-left rule, so shared
+  edges fill exactly once.
+
+=== Memory organization
+
+`vertex_mem[2048]x144` (`{uv, normal, pos}`), `index_mem[16384]x16`,
+`shader_mem[512]` (8 slots x 64), `zmem[57600]x16`, two color banks of
+57,600x12, texture 16,384x48.
+`(* rom_style="block" *)` with `$readmemh` at build; texture is read-only
+during draw and packs cleanly.
+
+NOTE: `vertex_mem`, `index_mem`, `shader_mem`, and the render target live
+inside the GPU file rather than as the separate `rtl/memory/` files the brief
+sketches. This is intentional in v0.3.0 and does not change behavior.

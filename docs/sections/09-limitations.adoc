@@ -1,0 +1,45 @@
+[#_known_limitations]
+== Known limitations
+
+What P1 does not do, what is fragile, and what changes first in P2.
+Read this before proposing optimizations.
+
+=== Functional gaps
+
+* Near-plane clipping is *not* implemented — the demo camera is constrained
+  to never cross it.
+* UART upload is write-only; the screen is the only acknowledgement.
+* Uploads persist per slot across mode switches but not across bitstream
+  reprogramming (baked `assets/program.mem` returns).
+* `CULL` is write-only; several geometry registers are effectively fixed at 0
+  in the demo host configuration.
+* DRAW validation uses a serial mod-3 check (state 42, 14 cycles per DRAW)
+  after `%` was found to infer a ~32 ns divider.
+
+=== Timing and flow fragility
+
+* Fabric-divided clocks with ~0.7% margin on the pineapple build; Vivado/MMCM
+  is the first robustness upgrade.
+* `-nodsp` synthesis works around a nextpnr DSP-carry routing limitation on
+  this install; multiplies stay in fabric.
+* nextpnr ignores `[current_design]` configuration properties in the reused
+  XDC; Project X-Ray falls back to its slower Python FASM parser.
+  Neither prevents bitstream generation.
+
+=== Verification debt
+
+* Physical D-pad confirmation (orbit, pitch, zoom, shader-mode cycling) and
+  bench sessions A1/A2 remain open — see <<_verification,Verification>>.
+* Second-asset silicon proof is closed (cube, `rtl/gpu/` untouched); the
+  remaining gate is the physical pass, not simulation.
+
+=== Correct P2 order
+
+. Split `pineapple_gpu.v` FSM into the sketched stage modules with
+  pixel-exact parity (`make verify`: zero mismatches, CRC `63134D29`).
+. Pipeline the reciprocal (throughput, not latency).
+. Widen interpolation only against counter data
+  (`fragments/killed/shaded/instructions/texture_requests`).
+
+Each stage should be a separately reviewable change with passing Icarus tests
+and synthesis for hardware changes.

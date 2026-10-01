@@ -2,7 +2,8 @@
    Keep this file small: sidebar behavior, disclosure arrows, active state,
    spacing, scrolling, responsive tables/code. No framework. */
 
-#toc {
+#toc,
+#toc.toc2 {
   position: fixed;
   top: 0;
   left: 0;
@@ -104,6 +105,15 @@
   display: none;
 }
 
+/* Asciidoctor's default stylesheet already offsets the body for a left TOC
+   (15em, 20em on wide screens). We position the content ourselves, so
+   neutralize that to avoid a double offset (wide gap between sidebar
+   and content). This loads after the default style, so it wins. */
+body.toc2 {
+  padding-left: 0;
+  padding-right: 0;
+}
+
 /* Main document sits beside the fixed sidebar (desktop default). */
 #header,
 #content,
@@ -157,7 +167,8 @@ table.tableblock td {
 }
 
 @media (max-width: 768px) {
-  #toc {
+  #toc,
+  #toc.toc2 {
     position: static;
     width: auto;
     max-height: 45vh;

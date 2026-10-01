@@ -1,27 +1,30 @@
 // Collapsible left TOC for Asciidoctor's built-in `#toc` sidebar.
 // No dependencies. Progressive enhancement: without JS the full TOC works.
-// With JS: disclosure buttons expand/collapse, state persists in localStorage.
+// With JS: sections start collapsed (major chapters visible); disclosure
+// buttons expand/collapse, expanded state persists in localStorage, and the
+// hierarchy containing the active section auto-expands.
 (function () {
   'use strict';
 
-  var STORAGE_KEY = 'pdocs-nav-v1';
+  var STORAGE_KEY = 'pdocs-nav-v2';
   var toc = document.getElementById('toc');
   if (!toc) return;
   var topList = toc.querySelector('ul');
   if (!topList) return;
 
-  // Load persisted collapsed-section ids (href anchors). Tolerate bad data.
-  var collapsed = {};
+  // Load persisted expanded-section ids (href anchors). Tolerate bad data.
+  // Fresh visitors (nothing stored) see every section collapsed.
+  var expanded = {};
   try {
     var raw = window.localStorage && window.localStorage.getItem(STORAGE_KEY);
-    if (raw) collapsed = JSON.parse(raw) || {};
+    if (raw) expanded = JSON.parse(raw) || {};
   } catch (e) {
-    collapsed = {};
+    expanded = {};
   }
   function save() {
     try {
       if (window.localStorage) {
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(collapsed));
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(expanded));
       }
     } catch (e) { /* private mode etc: nav still works for the session */ }
   }
@@ -55,8 +58,8 @@
         btn.textContent = isCollapsed ? '\u25B8' : '\u25BE';
         var id = sectionId(li);
         if (id) {
-          if (isCollapsed) collapsed[id] = true;
-          else delete collapsed[id];
+          if (isCollapsed) delete expanded[id];
+          else expanded[id] = true;
           save();
         }
       });
@@ -79,18 +82,39 @@
     }
   }
 
+  // Expand li and its ancestors so a section becomes visible.
+  // Records the expansion so it survives reloads.
+  // Returns true when anything changed (class or stored state).
+  function expandBranch(li) {
+    var changed = false;
+    var node = li;
+    while (node) {
+      if (node.tagName === 'LI') {
+        if (node.classList.contains('collapsed')) {
+          setCollapsed(node, false);
+          changed = true;
+        }
+        var id = sectionId(node);
+        if (id && !expanded[id]) {
+          expanded[id] = true;
+          changed = true;
+        }
+      }
+      node = node.parentNode ? node.parentNode.closest('li') : null;
+    }
+    return changed;
+  }
+
   // Enhance all levels that have children (top level + nested).
   var items = toc.querySelectorAll('li');
   items.forEach(function (li) { enhance(li); });
 
-  // Apply persisted state, then force-expand the active section's ancestors.
+  // Default state: every section with children starts collapsed, so the
+  // reader sees primarily the major chapters. Restore expanded sections.
   items.forEach(function (li) {
+    if (!li.querySelector(':scope > ul')) return;
     var id = sectionId(li);
-    if (id && collapsed[id] && li.querySelector(':scope > ul')) {
-      setCollapsed(li, true);
-    } else if (li.querySelector(':scope > ul')) {
-      setCollapsed(li, false);
-    }
+    setCollapsed(li, !(id && expanded[id]));
   });
 
   // Controls: Collapse all / Expand all (top-level only, unobtrusive).
@@ -116,15 +140,16 @@
       if (!li.querySelector(':scope > ul')) return;
       setCollapsed(li, true);
       var id = sectionId(li);
-      if (id) collapsed[id] = true;
+      if (id) delete expanded[id];
     });
     save();
   });
   expandBtn.addEventListener('click', function () {
     toc.querySelectorAll('li.collapsed').forEach(function (li) {
       setCollapsed(li, false);
+      var id = sectionId(li);
+      if (id) expanded[id] = true;
     });
-    collapsed = {};
     save();
   });
 
@@ -138,23 +163,17 @@
 
   function markActive() {
     var hash = window.location.hash;
+    var dirty = false;
     links.forEach(function (a) {
-      var on = hash && a.getAttribute('href') === hash;
+      var on = !!hash && a.getAttribute('href') === hash;
       a.classList.toggle('active', !!on);
       if (on) {
-        // Walk up and expand every collapsed ancestor.
+        // Walk up and expand the hierarchy containing this section.
         var li = a.closest('li');
-        while (li && li !== toc) {
-          if (li.classList.contains('collapsed')) {
-            setCollapsed(li, false);
-            var id = sectionId(li);
-            if (id) delete collapsed[id];
-          }
-          li = li.parentNode.closest('li');
-        }
-        save();
+        if (li && expandBranch(li)) dirty = true;
       }
     });
+    if (dirty) save();
   }
 
   // Scroll-spy: pick the last section heading above the viewport middle.
@@ -170,10 +189,17 @@
       targets.forEach(function (t) {
         if (t.offsetTop <= mid) current = t;
       });
+      var dirty = false;
       links.forEach(function (a) {
-        a.classList.toggle('active',
-          !!current && a.getAttribute('href') === '#' + current.id);
+        var on = !!current && a.getAttribute('href') === '#' + current.id;
+        a.classList.toggle('active', on);
+        if (on) {
+          // Keep the active hierarchy expanded while scrolling.
+          var li = a.closest('li');
+          if (li && expandBranch(li)) dirty = true;
+        }
       });
+      if (dirty) save();
     });
   }
 

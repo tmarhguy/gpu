@@ -128,20 +128,16 @@ body {
   background: #fff;
 }
 
-/* Dense but readable engineering tables. */
+/* Dense but readable engineering tables. Keep native table layout:
+   display:block on a <table> collapses it to one column. */
 table.tableblock {
+  width: 100%;
   font-size: 0.85rem;
 }
 
 table.tableblock th,
 table.tableblock td {
   padding: 0.35rem 0.55rem;
-}
-
-/* Long tables and code scroll instead of breaking layout. */
-.tableblock {
-  overflow-x: auto;
-  display: block;
 }
 
 .listingblock > .content > pre {

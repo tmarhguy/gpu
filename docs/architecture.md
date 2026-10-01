@@ -128,13 +128,34 @@ accident). Any capacity claim must cite a post-route report, never a bit total.
   fragile. They are kept because the FOSS Yosys → nextpnr-xilinx → Project
   X-Ray flow used here has no MMCM path installed; moving to Vivado/MMCM is
   the first timing-robustness upgrade, not a functional one.
-- Frame loop at 50 MHz (`frame_cycles`, host overhead included): cube
-  ≈1.36 M cycles ≈ **37 fps**, pineapple ≈2.0 M cycles ≈ **25 fps**; hardware
-  `PRESENT` can add up to one 16.7 ms vblank wait on top. 30 fps is a measured
-  target, never a guarantee (brief §contract).
-- Bottleneck order per fragment: 32-cycle perspective `q` divide → ~21-cycle
-  serial interpolation → fragment program (~5 cycles/instruction) → raster
-  walk. Pipelining any of these is justified only by counter data
+- Frame loop at 50 MHz (`frame_cycles`, host overhead included, Icarus 13.0,
+  2026-10-01). Pose- and mode-dependent — fps is a measurement, not a spec:
+
+  | workload | cycles | fps | notes |
+  |---|---|---|---|
+  | cube yaw 0, mode 0 (diffuse) | 1,359,877 | 36.8 | face-on: 9,120 of 18,240 fragments early-Z killed |
+  | cube yaw 5, mode 0 (diffuse) | 1,835,013 | 27.2 | 14,052 shaded × ~11 instr |
+  | cube yaw 5, mode 1 (normal) | 1,409,029 | 35.5 | 14,052 shaded × ~5 instr |
+  | cube yaw 5, mode 2 (toon) | 1,835,013 | 27.2 | same cost class as diffuse |
+  | cube yaw 5, modes 3/4/5 | 1.20–1.28 M | 39–42 | cheapest shaders |
+  | pineapple showcase | 1,998,853 | 25.0 | 1,072 tris, 12,780 shaded × ~14 instr |
+
+  Hardware `PRESENT` can add up to one 16.7 ms vblank wait on top. 30 fps is
+  a measured target, never a guarantee (brief §24).
+- Bottleneck attribution (pineapple frame, from counters + FSM latencies):
+  shader execution ~45% (179,172 instr × ~5 cycles — irreducible, it is the
+  workload), **divider-blocked reciprocal waits ~27%** (16k fragment + 3.2k
+  vertex + 1k setup waits × 32 cycles; `CLEAR` is a fixed 57,600), serial
+  interpolation ~17% (7 attributes × 3 cycles × 16,165 fragments), raster
+  stepping and host overhead the rest. Early-Z kills 3,385 fragments before
+  shading — without it the frame would cost ~25% more.
+- One structural win clears 30 fps: a pipelined reciprocal (2-cycle
+  throughput instead of 32-cycle blocking) removes ~0.5 M cycles → pineapple
+  ≈1.5 M ≈ 33 fps. It is provably bit-exact because every numerator is a
+  site constant (`2^24` for `q`, `2^30` for `1/area`) — only denominators
+  vary over enumerable ranges, so exhaustive equivalence sim is feasible.
+  Interpolation widening (~−11%) is the second lever, not the first.
+  Pipelining either is justified only against this counter data
   (`fragments/killed/shaded/instructions/texture_requests`).
 
 ## What the diagram simplifies (honest gaps)

@@ -45,7 +45,9 @@ The second-asset check is closed in v0.3.0 below.
   (`gpu_clk` 55.43 MHz); board reprogrammed and the pineapple confirmed on
   screen again.
 - Measured frame loop at 50 MHz (sim `frame_cycles`, incl. host overhead):
-  cube ≈1.36M cycles ≈ 37 fps, pineapple ≈2.0M cycles ≈ 25 fps; hardware
+  cube ≈1.36M cycles ≈ 37 fps face-on (reproduced 2026-10-01 at yaw 0;
+  yaw-5 diffuse runs 1.84M ≈ 27 fps — see the per-mode table in
+  [architecture](architecture.md)), pineapple ≈2.0M cycles ≈ 25 fps; hardware
   PRESENT can add up to one 16.7 ms vblank wait on top.
 
 ## 2026-09-25 — milestone 1 bring-up (v0.1.0)

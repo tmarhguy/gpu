@@ -120,7 +120,9 @@ cycle the six shader modes. CPU_RESETN resets the design.
 host and framebuffer/texture memories. `rtl/cube_top.v` re-targets the same
 GPU at the cube asset (`make fpga-cube` / `make program-cube`). `tb/` checks
 units, full frames and button behavior. Remaining: physical D-pad confirmation.
-Measured frame loop at 50 MHz: ≈37 fps cube, ≈25 fps pineapple.
+Measured frame loop at 50 MHz: ≈37 fps cube face-on (≈27 fps at yaw 5 in
+diffuse mode — fps is pose- and mode-dependent, see the per-mode table in
+[architecture](docs/architecture.md)), ≈25 fps pineapple.
 
 See [milestones](docs/milestones.md) and [reuse provenance](docs/provenance.md).
 Every milestone requires Icarus checks;

@@ -22,7 +22,7 @@ Executed locally using Icarus and the installed Tomato toolchain
   serial mod-3 validator (state 42, 14 cycles per DRAW, exhaustive proof
   over all 16384 counts); DRAW-error behavior is covered by `tb_drawerr.v`.
 - `make program`: PASS — SRAM load 100%, DONE flag set.
-- Hardware: HDMI capture ([photo](hardware-pineapple.jpg)) shows the lit,
+- Hardware: HDMI capture ([photo](validation/hardware-pineapple.jpg)) shows the lit,
   textured pineapple on the dark-blue clear color, matching the reference
   pose and lighting. The USB capture crops/scales the 640x360 image area;
   geometry, texture, and shading match the golden frame exactly.
@@ -38,7 +38,7 @@ The second-asset check is closed in v0.3.0 below.
 - Cube build `make fpga-cube`: PASS at 50 MHz post-route (`gpu_clk`
   60.88 MHz, `pix_clk` 120.32 MHz).
 - `make program-cube`: PASS, DONE set. HDMI capture
-  ([photo](hardware-cube.jpg)) shows the diffuse-shaded cube face on the
+  ([photo](validation/hardware-cube.jpg)) shows the diffuse-shaded cube face on the
   dark-blue clear color, matching the mode-0 yaw-0 sim/reference frame
   (CRC 641A94BF, 0 mismatches).
 - Pineapple build rebuilt after the parameter plumbing and re-timed clean
@@ -65,7 +65,7 @@ The second-asset check is closed in v0.3.0 below.
   `make program`, then verify color bars and all five bring-up controls.
 - `git diff --check`: PASS (new files were also inspected during creation).
 
-Logs: [Icarus](icarus.log), [FPGA/program summary](fpga-summary.log).
+Logs: [Icarus](validation/icarus.log), [FPGA/program summary](validation/fpga-summary.log).
 
 The flow warns that nextpnr ignores `[current_design]` configuration properties
 in the reused XDC. Project X-Ray also falls back to its slower Python FASM parser.

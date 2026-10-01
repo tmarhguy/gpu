@@ -69,3 +69,37 @@ The flow warns that nextpnr ignores `[current_design]` configuration properties
 in the reused XDC. Project X-Ray also falls back to its slower Python FASM parser.
 Neither prevented bitstream generation. Timing is nextpnr's internal analysis;
 TFP410 board-level setup/hold and visible output still require physical validation.
+
+## Sim re-verification (2026-10-01, Icarus 13.0, Apple Silicon)
+
+- `make test`: PASS — all 9 binaries (board, keypad, camera, framebuffer,
+  reciprocal, drawerr, 96-program shader, rasterizer, uart).
+- `make verify`: PASS — pineapple showcase CRC `63134D29` (0 mismatches,
+  1,998,853 cycles), cube modes 0-5 all CRC-matched with 0 mismatches.
+
+## Hardware session A1/A2 — pending (fill in at the bench)
+
+Builds: `make program` (pineapple), `make program-cube` (cube).
+Photos land beside `hardware-pineapple.jpg` / `hardware-cube.jpg`.
+
+### A1 — controls and modes
+
+| # | Build | Input | Expected | Photo | Result |
+|---|---|---|---|---|---|
+| 1 | pineapple | power-on boot | lit textured pineapple on `0x013` | | |
+| 2 | pineapple | RIGHT x3 | yaw steps, matches sim poses | | |
+| 3 | pineapple | UP x2 | pitch steps, matches sim poses | | |
+| 4 | pineapple | CENTER+UP / CENTER+DOWN | zoom in / out | | |
+| 5 | pineapple | CENTER tap modes 0-5 | 0 diffuse, 1 normal, 2 toon, 3 unlit, 4 uv, 5 depth | | |
+| 6 | cube | boot + RIGHT x2 + modes 0,1 | same behavior, cube asset | | |
+
+Any photo diverging from the sim-predicted frame is a P1 defect: record the
+mode/yaw and the reference CRC here.
+
+### A2 — live shader upload
+
+| # | Step | Expected | Result |
+|---|---|---|---|
+| 1 | mode 2 selected, `python3 tools/pineload.py shaders/flat.frag --mode 2` | flat-shaded frame, no resynthesis/reboot | |
+| 2 | CENTER-tap away and back to mode 2 | upload persists in its slot | |
+| 3 | `0x4C` PROG_LOADS before/after | +1, `error` flag clear | |

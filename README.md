@@ -130,6 +130,14 @@ hardware changes also require synthesis. Bit-accurate Python reference behavior
 must precede the rasterizer and shader RTL. The ten-stage implementation order
 in the brief is preserved.
 
+## Documentation
+
+Detailed architecture, implementation, verification, and technical
+documentation is available in the project documentation.
+Build it locally with `make docs` (requires Asciidoctor) and open
+`build/docs/index.html`. Source lives in `docs/index.adoc` and
+`docs/sections/`.
+
 ## Changelog and license
 
 See [CHANGELOG.md](CHANGELOG.md). MIT only, see [LICENSE](LICENSE) — personal

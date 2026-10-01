@@ -4,7 +4,8 @@ module pineapple_gpu #(parameter ASSET="assets/packed/")(
  input clk,reset,pix_clk,pix_reset,
  input [15:0] addr,input [31:0] wdata,input write,read,valid,
  output ready,output reg [31:0] rdata,
- input vblank_start,input [15:0] scan_addr,output [11:0] scan_color,output display_valid);
+ input vblank_start,input [15:0] scan_addr,output [11:0] scan_color,output display_valid,
+ input [7:0] rx_data,input rx_valid,output host_hold);
  reg [7:0] state;
  reg [11:0] clear_color;
  reg [13:0] index_count,index_base,offset;
@@ -31,11 +32,18 @@ module pineapple_gpu #(parameter ASSET="assets/packed/")(
  wire [15:0] tex_addr;
  wire [11:0] tex_data;
  wire [31:0] instructions,texture_requests;
+ wire prog_we; wire [8:0] prog_addr; wire [31:0] prog_data; wire [31:0] prog_loads; wire prog_error;
  texture_mem #(.FILE({ASSET,"texture.mem"})) tex(.clk(clk),.addr(tex_addr),.data(tex_data));
  shader_core shader(.clk(clk),.reset(reset),.start(shader_start),.program_base(shader_base),
   .in0(in0),.in1(in1),.in2(in2),.uniform_addr(uaddr),.uniform_data(udata),
   .texture_addr(tex_addr),.texture_data(tex_data),.busy(shader_busy),.done(shader_done),.fault(shader_fault),
-  .out0(out0),.out1(out1),.out2(out2),.instructions(instructions),.texture_requests(texture_requests));
+  .out0(out0),.out1(out1),.out2(out2),.instructions(instructions),.texture_requests(texture_requests),
+  .prog_we(prog_we),.prog_addr(prog_addr),.prog_data(prog_data));
+ // Runtime shader upload commits only while the command state machine is
+ // idle, so in-flight DRAWs always execute an intact program.
+ shader_loader loader(.clk(clk),.reset(reset),.rx_valid(rx_valid),.rx_data(rx_data),
+  .gpu_idle(state==0),.prog_we(prog_we),.prog_addr(prog_addr),.prog_data(prog_data),
+  .host_hold(host_hold),.loads(prog_loads),.error(prog_error));
  reg div_start;
  reg [31:0] numerator,denominator;
  wire div_done,div_busy;
@@ -119,6 +127,7 @@ module pineapple_gpu #(parameter ASSET="assets/packed/")(
    16'h40:rdata=shaded;
    16'h44:rdata=texture_requests;
    16'h48:rdata=instructions;
+   16'h4c:rdata=prog_loads;
    default:rdata=0;
   endcase
  end

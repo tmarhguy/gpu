@@ -10,7 +10,8 @@ module tb_shader;
  texture_mem tm(.clk(clk),.addr(ta),.data(td));
  shader_core dut(.clk(clk),.reset(reset),.start(start),.program_base(9'd0),.in0(in0),.in1(in1),.in2(in2),
  .uniform_addr(ua),.uniform_data({18'd17,18'd2048,18'h3f000,18'd4096}),.texture_addr(ta),.texture_data(td),
- .busy(busy),.done(done),.fault(fault),.out0(out0),.out1(out1),.out2(out2),.instructions(ins),.texture_requests(tex));
+ .busy(busy),.done(done),.fault(fault),.out0(out0),.out1(out1),.out2(out2),.instructions(ins),.texture_requests(tex),
+ .prog_we(1'b0),.prog_addr(9'd0),.prog_data(32'd0));
  integer i,j;
  initial begin
   $readmemh("build/shader-programs.mem",programs);$readmemh("build/shader-inputs.mem",inputs);$readmemh("build/shader-expected.mem",expected);

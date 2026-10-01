@@ -18,10 +18,11 @@ module tb_gpu;
  localparam ASSET="assets/cube/";
  localparam COUNT=36;
 `endif
- demo_host #(.INDEX_COUNT(COUNT)) host(.clk(clk),.reset(reset),.yaw(yaw),.pitch(4'd4),.zoom(2'd0),.mode(mode),.addr(addr),.wdata(wd),.write(wr),.valid(valid),.ready(ready));
+ demo_host #(.INDEX_COUNT(COUNT)) host(.clk(clk),.reset(reset),.yaw(yaw),.pitch(4'd4),.zoom(2'd0),.mode(mode),.hold(1'b0),.addr(addr),.wdata(wd),.write(wr),.valid(valid),.ready(ready));
  pineapple_gpu #(.ASSET(ASSET)) dut(.clk(clk),.reset(reset),.pix_clk(pclk),.pix_reset(reset),
  .addr(addr),.wdata(wd),.write(wr),.read(1'b0),.valid(valid),.ready(ready),.rdata(rd),
- .vblank_start(blank_count==0),.scan_addr(16'd0),.scan_color(pixel),.display_valid(visible));
+ .vblank_start(blank_count==0),.scan_addr(16'd0),.scan_color(pixel),.display_valid(visible),
+ .rx_data(8'd0),.rx_valid(1'b0),.host_hold());
  integer f,i,cycles=0,argmode,argyaw;
  reg [1023:0] filename;
  always @(posedge clk) begin

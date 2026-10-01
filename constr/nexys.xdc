@@ -17,6 +17,9 @@ set_property -dict { PACKAGE_PIN P18 IOSTANDARD LVCMOS33 } [get_ports btnd]
 set_property -dict { PACKAGE_PIN P17 IOSTANDARD LVCMOS33 } [get_ports btnl]
 set_property -dict { PACKAGE_PIN M17 IOSTANDARD LVCMOS33 } [get_ports btnr]
 
+## ---- USB-UART receive (shader upload, 115200 8N1) -------------------------
+set_property -dict { PACKAGE_PIN C4 IOSTANDARD LVCMOS33 } [get_ports RsRx]
+
 ## ---- 12-bit DVI PMOD v1.1b -----------------------------------------------
 ## Identical mapping to hardware/fpga/hdmi_test — the bring-up that lit a screen.
 ## JC = R/G (PMOD1A): pin1 R3, pin2 R1, pin3 G3, pin4 G1, pin7 R2, pin8 R0, pin9 G2, pin10 G0

@@ -3,6 +3,7 @@
 // the camera table is shared by all assets.
 module demo_host #(parameter INDEX_COUNT=3216)(input clk,reset,
  input [4:0] yaw,input [3:0] pitch,input [1:0] zoom,input [2:0] mode,
+ input hold,
  output reg [15:0] addr,output reg [31:0] wdata,output write,valid,input ready);
  (* rom_style="block" *) reg [17:0] cameras[0:18431];
  initial $readmemh("assets/camera.mem",cameras);
@@ -33,7 +34,9 @@ module demo_host #(parameter INDEX_COUNT=3216)(input clk,reset,
  end
  always @(posedge clk) begin
   if(reset) begin state<=1; component<=0; camera_base<=0; shader_mode<=0; end
-  else case(state)
+  // Shader upload in progress: freeze mid-stream. The presented command (if
+  // any) was already consumed when the GPU left idle, so nothing double-issues.
+  else if(!hold) case(state)
    1,2,3,4,5,6: if(ready) state<=state+1'b1;
    7:begin camera_base<=((zoom*288)+(pitch*32)+yaw)*16; component<=0; shader_mode<=mode; state<=8; end
    8:state<=9;

@@ -33,6 +33,8 @@ test:
 	vvp build/tb_shader
 	iverilog -g2012 -Wall -DPINEAPPLE_SIM -s tb_rasterizer -o build/tb_rasterizer rtl/gpu/rasterizer.v tb/tb_rasterizer.v
 	vvp build/tb_rasterizer
+	iverilog -g2012 -Wall -DPINEAPPLE_SIM -s tb_uart -o build/tb_uart rtl/board/uart_rx.v rtl/gpu/shader_loader.v tb/tb_uart.v
+	vvp build/tb_uart
 
 # Pixel-exact full-pipeline check: RTL frames must match the integer reference
 # for the cube (all six shader modes), the pineapple showcase, and DRAW errors.

@@ -9,7 +9,8 @@ module tb_drawerr;
   .pix_clk(clk),.pix_reset(reset),
   .addr(addr),.wdata(wdata),.write(write),.read(1'b0),.valid(valid),
   .ready(ready),.rdata(rdata),
-  .vblank_start(1'b0),.scan_addr(16'd0),.scan_color(),.display_valid());
+  .vblank_start(1'b0),.scan_addr(16'd0),.scan_color(),.display_valid(),
+  .rx_data(8'd0),.rx_valid(1'b0),.host_hold());
  task w(input [15:0] a, input [31:0] d); begin
   @(negedge clk); addr=a; wdata=d; write=1; valid=1;
   @(negedge clk); write=0; valid=0;

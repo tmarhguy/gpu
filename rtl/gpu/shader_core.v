@@ -4,8 +4,9 @@ module shader_core(input clk,reset,start, input [8:0] program_base,
  output [5:0] uniform_addr,input [71:0] uniform_data,
  output [15:0] texture_addr,input [11:0] texture_data,
  output reg busy,done,fault,output reg [71:0] out0,out1,out2,
- output reg [31:0] instructions,texture_requests);
- (* rom_style="block" *) reg [31:0] program_mem[0:511];
+ output reg [31:0] instructions,texture_requests,
+ input prog_we, input [8:0] prog_addr, input [31:0] prog_data);
+ (* ram_style="block" *) reg [31:0] program_mem[0:511];
  initial $readmemh("assets/program.mem",program_mem);
  reg [31:0] ins;
  reg [8:0] pc;
@@ -26,12 +27,16 @@ module shader_core(input clk,reset,start, input [8:0] program_base,
  reg signed [37:0] dot;
  integer i;
  reg signed [17:0] aa,bb,cc;
+ // Instruction fetch keeps its single-cycle latency; runtime upload arrives
+ // on an independent write port (used only while the GPU is idle).
+ always @(posedge clk) ins<=program_mem[pc];
+ always @(posedge clk) if(prog_we) program_mem[prog_addr]<=prog_data;
  always @* begin
   dot=$signed(prod[0])+$signed(prod[1])+$signed(prod[2]);
   if(op==9) dot=dot+$signed(prod[3]);
  end
  always @(posedge clk) begin
-  ins<=program_mem[pc]; done<=0;
+  done<=0;
   if(reset) begin busy<=0; state<=0; fault<=0; instructions<=0; texture_requests<=0; pc<=0; end
   else case(state)
    0: if(start) begin

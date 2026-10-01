@@ -1,97 +1,76 @@
-Yes. I would change the goal one final time and freeze it.
+# Pineapple GPU P1 — Architectural Specification
 
-We are **not building a pineapple renderer**.
+Status: **frozen**. This document defines the P1 goals and requirements.
+The as-built implementation contract (files, clocks, pins, measured budgets,
+and known deviations) is recorded in [architecture](architecture.md).
+Supporting specifications: [PineBus registers](registers.md),
+[shader ISA](shader_isa.md), [fixed point](fixed_point.md).
 
-We are building a **small, real, programmable 3D GPU**, and the pineapple is simply its first showcase workload.
+## 1. Objective
 
-That distinction changes several architectural choices. There will be no ESP32, no soft RISC-V doing the rendering, and no object-specific RTL. The FPGA itself implements the graphics processor: programmable vertex processing, triangle setup/rasterization, depth, perspective-correct attributes, texture sampling, programmable fragment processing, framebuffer, and presentation. A tiny board-side controller exists only to submit draw commands and update the camera from the five buttons.
+P1 is a **standalone programmable 3D graphics processor for interactive
+textured-mesh rendering on the Nexys A7-100T** — not a pineapple renderer.
+The textured pineapple is the first showcase workload; the architecture
+shall render arbitrary indexed triangle meshes (cube, teapot, spaceship)
+without changes to the GPU RTL.
 
-The target problem is:
+There is no ESP32, no soft RISC-V, and no object-specific rendering logic
+in P1. The FPGA implements the graphics processor: programmable vertex
+processing, triangle setup and rasterization, depth, perspective-correct
+attribute interpolation, texture sampling, programmable fragment processing,
+framebuffer, and presentation. A small board-side controller submits draw
+commands and updates the camera from the five buttons.
 
-> **Pineapple GPU P1: a standalone programmable 3D graphics processor for interactive textured-mesh rendering on the Nexys A7-100T.**
+## 2. System architecture
 
-The first showcase is a detailed pineapple that you can orbit with the D-pad. But the architecture must be able to render a cube, teapot, spaceship, etc. without changing the GPU RTL.
-
-And fortunately, Tomato gives us a major head start on everything *outside* the GPU. Your existing FPGA setup already proves the Nexys A7-100T, the JC/JD TFP410 DVI/HDMI path, 25 MHz 640×480 timing, D-pad pins/debouncing, and the entire Yosys → nextpnr-xilinx → Project X-Ray → openFPGALoader flow. :chatgpt-content-reference{index="0"}
-
-# Pineapple GPU P1 — architectural specification
-
-The finished system should look like this:
-
-```text
-                        NEXYS A7-100T
-┌──────────────────────────────────────────────────────────────┐
-│                                                              │
-│   Five buttons                                               │
-│       │                                                      │
-│       ▼                                                      │
-│ ┌──────────────┐                                             │
-│ │ Demo / Host  │ ───── PineBus commands ─────────────┐       │
-│ │ Controller   │                                      │       │
-│ └──────────────┘                                      ▼       │
-│                                               ┌─────────────┐ │
-│                                               │ COMMAND     │ │
-│                                               │ PROCESSOR   │ │
-│                                               └──────┬──────┘ │
-│                                                      │        │
-│                                          DRAW_INDEXED / CLEAR │
-│                                                      │        │
-│                                                      ▼        │
-│ ┌────────────┐      ┌──────────────┐       ┌───────────────┐ │
-│ │ Vertex RAM │ ───► │ PROGRAMMABLE │ ────► │ PRIMITIVE /   │ │
-│ │ Index RAM  │      │ VERTEX CORE  │       │ CLIP / CULL   │ │
-│ └────────────┘      └──────────────┘       └───────┬───────┘ │
-│                                                    │          │
-│                                                    ▼          │
-│                                            ┌──────────────┐   │
-│                                            │ TRIANGLE     │   │
-│                                            │ SETUP        │   │
-│                                            └──────┬───────┘   │
-│                                                   │           │
-│                                                   ▼           │
-│                                            ┌──────────────┐   │
-│                                            │ RASTERIZER   │   │
-│                                            └──────┬───────┘   │
-│                                                   │ fragments │
-│                                                   ▼           │
-│                                            ┌──────────────┐   │
-│                                            │ INTERPOLATOR │   │
-│                                            └──────┬───────┘   │
-│                                                   │           │
-│                     ┌─────────────┐               ▼           │
-│                     │ Texture RAM │◄──────┐ ┌──────────────┐ │
-│                     └─────────────┘       └─│ PROGRAMMABLE │ │
-│                                             │ FRAGMENT CORE│ │
-│                                             └──────┬───────┘ │
-│                                                    │         │
-│                                                    ▼         │
-│                                               DEPTH TEST     │
-│                                                    │         │
-│                                                    ▼         │
-│                                       ┌────────────────────┐ │
-│                                       │ Double Framebuffer │ │
-│                                       └──────────┬─────────┘ │
-│                                                  │           │
-│                                                  ▼           │
-│                                              SCANOUT         │
-│                                                  │           │
-│                                       Tomato DVI output      │
-└──────────────────────────────────────────────────┼───────────┘
-                                                   ▼
-                                                MONITOR
+```mermaid
+flowchart TD
+    subgraph NEXYS["NEXYS A7-100T · xc7a100tcsg324-1"]
+        BTNS["Five buttons<br/>N17 C · M18 U · P18 D · P17 L · M17 R"]
+        subgraph GPUCLK["gpu_clk · 50 MHz"]
+            HOST["Demo / Host Controller<br/>rtl/host"]
+            CMD["COMMAND PROCESSOR<br/>CLEAR · DRAW_INDEXED · PRESENT"]
+            MEMV[("Vertex RAM · Index RAM")]
+            VCORE{{"PROGRAMMABLE VERTEX CORE"}}
+            PRIM["PRIMITIVE / CLIP / CULL"]
+            SETUP["TRIANGLE SETUP"]
+            RAST["RASTERIZER"]
+            INTERP["INTERPOLATOR"]
+            TEX[("Texture RAM")]
+            FCORE{{"PROGRAMMABLE FRAGMENT CORE"}}
+            DEPTH{"DEPTH TEST"}
+            FB[("Double Framebuffer")]
+        end
+        subgraph PIXCLK["pix_clk · 25 MHz"]
+            SCAN["SCANOUT<br/>640x360 centered in 640x480"]
+            DVI["Tomato DVI output<br/>TFP410 · JC / JD"]
+        end
+    end
+    MON[("MONITOR")]
+    BTNS --> HOST
+    HOST -- "PineBus commands" --> CMD
+    CMD -- "DRAW_INDEXED / CLEAR" --> MEMV
+    MEMV --> VCORE
+    VCORE --> PRIM
+    PRIM --> SETUP
+    SETUP --> RAST
+    RAST -- "fragments" --> INTERP
+    INTERP --> FCORE
+    TEX --> FCORE
+    FCORE --> DEPTH
+    DEPTH --> FB
+    FB -- "vblank swap · CDC" --> SCAN
+    SCAN --> DVI
+    DVI --> MON
+    classDef prog fill:#b71c1c,color:#fff,stroke:#7f0000;
+    class VCORE,FCORE prog;
 ```
 
-That is the architecture I would call a GPU without qualifications.
+The conformance test is data-independence: `pineapple.obj` is data. The GPU
+shall observe only vertices, indices, textures, uniforms, shader
+instructions, and draw commands.
 
-## What makes it a real GPU
-
-The crucial test is that **none of the graphics logic knows what a pineapple is**.
-
-`pineapple.obj` is data.
-
-The GPU sees vertices, indices, textures, uniforms, shader instructions and draw commands.
-
-The software-facing contract should eventually look approximately like:
+The software-facing command contract shall be approximately:
 
 ```text
 SET_VERTEX_BUFFER
@@ -105,33 +84,16 @@ DRAW_INDEXED
 PRESENT
 ```
 
-That distinction is enormously important.
-
 A state machine whose states happen to draw a pineapple is a renderer.
+This specification requires a graphics processor.
 
-This is a graphics processor.
+## 3. Resolution
 
----
+External output: **640×480 @ ~60 Hz**, the video path proven by the existing
+DVI infrastructure (25 MHz pixel clock, 800×525 timing).
 
-# 1. Resolution: I would actually choose 320×180
-
-I'm changing my earlier 320×240 recommendation after thinking seriously about the BRAM architecture.
-
-We still output:
-
-**640×480 @ ~60 Hz**
-
-because that is the path Tomato already knows works. Your existing `videoout.v` actually already contains a 320×240 RGB444 image path that doubles pixels to 640×480, so the scaling concept is already physically proven on this board. :chatgpt-content-reference{index="1"}
-
-But Pineapple renders internally at:
-
-**320×180**, 16:9.
-
-We double it to:
-
-**640×360**
-
-and center it vertically in the 640×480 signal:
+Internal render resolution: **320×180** (16:9), pixel-doubled to **640×360**
+and centered vertically in the 640×480 signal between two 60 px black bars:
 
 ```text
 640 × 480 monitor
@@ -148,44 +110,20 @@ and center it vertically in the 640×480 signal:
 └─────────────────────────────────────────┘
 ```
 
-That isn't because the FPGA lacks compute.
+Rationale: BRAM is the P1 VRAM, so framebuffer footprint dominates the
+resolution choice — not compute. At 320×180 (57,600 pixels) and 30
+rendered frames/sec, the visible rate is 1.728 M pixels/sec; at a 100 MHz
+GPU clock that budgets ≈57.9 cycles per visible pixel before overdraw —
+sufficient headroom for a programmable pipeline.
 
-It's because **BRAM is our VRAM** in P1.
+## 4. Memory architecture
 
-At 320×180:
-
-\[
-57,600\text{ pixels}
-\]
-
-At 30 rendered frames/sec:
-
-\[
-1.728\text{ million visible pixels/sec}
-\]
-
-At a 100 MHz GPU clock:
-
-\[
-\frac{100M}{1.728M}\approx57.9
-\]
-
-We have nearly **58 GPU cycles per visible pixel** before accounting for overdraw.
-
-That gives us enough performance budget to build an actually interesting GPU instead of spending all of it moving framebuffer bits around.
-
----
-
-# 2. Memory architecture
-
-P1 deliberately treats Artix-7 BRAM as the GPU's VRAM.
-
-We'll have:
+P1 treats Artix-7 block RAM as GPU VRAM:
 
 | Memory | Format | Purpose |
 |---|---|---|
-| Front color buffer | RGB444 | current displayed frame |
-| Back color buffer | RGB444 | frame being rendered |
+| Front color buffer | RGB444 | displayed frame |
+| Back color buffer | RGB444 | frame under construction |
 | Z buffer | 16-bit | hidden-surface removal |
 | Texture memory | RGB444 | initial 256×256 texture |
 | Vertex memory | packed | mesh vertices |
@@ -193,53 +131,31 @@ We'll have:
 | Shader program RAM | 32-bit | VS + FS programs |
 | Uniform RAM | 18-bit/vector | matrices, light, constants |
 
-Double buffering is mandatory.
+Double buffering is mandatory. The display reads the front buffer while the
+GPU writes the back buffer; `PRESENT` swaps them on vertical blank. No
+tearing is permitted.
 
-The display reads **front** while the GPU writes **back**.
+External DDR2 may become VRAM in a later revision. It is explicitly not a
+P1 prerequisite: shader, interpolation, and rasterization architecture take
+priority over memory-controller integration.
 
-At `PRESENT`, they swap on vertical blank.
+Resource envelope: the XC7A100T provides 135 RAMB36 and 240 DSP48E1.
+Color, depth, and texture payload alone total 3,090,432 bits (≈84 RAMB36 at
+ideal packing); port-width and depth rounding plus mesh, shader, and uniform
+storage consume further blocks. Capacity claims shall cite post-route
+primitive packing reports, never raw bit counts.
 
-No tearing.
+## 5. Color format
 
-Later external DDR2 can become actual VRAM. But I do **not** want DDR2 to block P1; implementing or integrating a DDR controller teaches us much less about GPUs than implementing shaders, interpolation, caches and rasterization.
+Logical render target: **RGB444** (`rrrr gggg bbbb`, 12 bits), matching the
+physical TFP410 interface (`R[3:0] G[3:0] B[3:0]`). Wider framebuffers whose
+bits are discarded at scanout are prohibited. Shader arithmetic retains
+higher internal precision; only the render target quantizes to RGB444.
 
-The 100T has 135 RAMB36 blocks and 240 DSP48E1 units available, so this resource strategy is realistic. Tomato currently uses only a fraction of those resources, although Pineapple will obviously be a completely separate design. :chatgpt-content-reference{index="2"}
+## 6. Programmable shader architecture
 
----
-
-# 3. Color format: RGB444
-
-This is another deliberate board-specific choice.
-
-Your physical display interface already sends:
-
-```text
-R[3:0]
-G[3:0]
-B[3:0]
-```
-
-into the TFP410. :chatgpt-content-reference{index="3"}
-
-Therefore our logical render target is:
-
-```text
-rrrr gggg bbbb
-```
-
-12 bits.
-
-There is no benefit in using a 32-bit framebuffer just to throw most of it away at scanout.
-
-Internally, shader arithmetic has much higher precision. Only the final render target quantizes to RGB444.
-
----
-
-# 4. A real programmable shader architecture
-
-This is the biggest upgrade over the earlier plan.
-
-There will be **two programmable stages**:
+P1 provides **two programmable stages** — vertex and fragment — sharing one
+Pine shader core design:
 
 ```text
 programmable vertex shader
@@ -249,42 +165,16 @@ fixed-function rasterization
 programmable fragment shader
 ```
 
-Both use the **same Pine shader ISA** and essentially the same shader-core RTL.
+### 6.1 Pine shader core
 
-That means we're actually learning about GPU execution architecture, not merely attaching a tiny shader gimmick to a fixed renderer.
+A small vector processor: 16 vector registers (`r0…r15`), each a 4-component
+`{x,y,z,w}` tuple. Each component is **18-bit fixed point, 12 fractional
+bits** (S18Q12, ≈ −32.0…+31.999) — sized to fit Artix-7 DSP48 arithmetic
+without multi-DSP carry chains. Specialized coordinates (UV, depth) use
+formats suited to their function; see [fixed point](fixed_point.md).
 
-## Pine Shader Core
-
-I would make it a small vector processor.
-
-Conceptually:
-
-```text
-16 vector registers
-
-r0  = {x,y,z,w}
-r1  = {x,y,z,w}
-...
-r15 = {x,y,z,w}
-```
-
-Each component is **18-bit fixed point**.
-
-Why 18?
-
-Because it maps beautifully onto the Artix-7's DSP48 arithmetic instead of requiring large multi-DSP multipliers. Tomato encountered routing trouble specifically when 33×33 arithmetic had to span multiple DSPs; Pineapple should intentionally keep the normal multiply width small enough to fit cleanly. :chatgpt-content-reference{index="4"}
-
-Our general signed arithmetic format can use 12 fractional bits:
-
-```text
-18-bit signed
-≈ -32.0 ... +31.999
-12 fractional bits
-```
-
-Specialized coordinates such as UV and depth can use formats appropriate to their jobs.
-
-The initial shader ISA should contain roughly:
+Initial ISA (straight-line programs only; no branches — control-flow and
+divergence handling are deferred until the base processor is proven):
 
 | Family | Instructions |
 |---|---|
@@ -297,29 +187,13 @@ The initial shader ISA should contain roughly:
 | Output | `OUT` |
 | Control | `END` |
 
-No branch instructions initially.
+Full encoding and semantics: [shader ISA](shader_isa.md).
 
-That is deliberate.
+## 7. Vertex shader
 
-Straight-line shader programs are enough for the showcase, while avoiding the entire divergence/control-flow problem until the base processor works.
-
-Later Pineapple can add predication and branching.
-
----
-
-# 5. Vertex shader
-
-The input vertex should be a general packed structure containing:
-
-```text
-position.xyz
-normal.xyz
-uv.xy
-```
-
-The vertex shader gets those as input registers plus uniforms.
-
-Example Pine shader:
+Input vertices are packed structures carrying `position.xyz`, `normal.xyz`,
+and `uv.xy`. The vertex shader receives them as input registers plus
+uniforms. Reference vertex program (matrix transform):
 
 ```asm
 DP4   r8.x, r0, u0
@@ -333,196 +207,64 @@ MOV   oUV,       r2
 END
 ```
 
-So the familiar equation:
+The clip-space transform `p_clip = M_MVP · p` is therefore a program, not
+hardwired logic. Mesh deformation via replacement vertex shaders shall
+require no bitstream change.
 
-\[
-p_{clip}=M_{MVP}p
-\]
+## 8. Primitive assembly, clipping, and culling
 
-isn't hardwired into the vertex hardware.
-
-It's a program.
-
-That matters.
-
-Eventually someone could write a vertex shader that bends the pineapple, waves its leaves, deforms a mesh, etc.
-
-No new bitstream.
-
-That's a GPU.
-
----
-
-# 6. Primitive assembly, clipping and culling
-
-The primitive assembler consumes three processed vertices.
-
-It calculates the signed screen-space area:
-
-\[
-A =
-(x_1-x_0)(y_2-y_0)
--
-(y_1-y_0)(x_2-x_0)
-\]
-
-The sign handles backface culling.
-
-The magnitude also becomes useful for barycentric interpolation.
-
-For initial bring-up, we will support:
-
-**triangle list topology.**
-
-No lines, strips, fans, patches, etc.
-
-The rasterizer clamps triangle bounding boxes to the viewport, so geometry completely offscreen disappears naturally.
-
-Full homogeneous near-plane clipping can arrive after the first working 3D pipeline. We constrain the demo camera initially so it never intersects the pineapple.
-
-That's one of the few places where I deliberately accept an incomplete GPU feature in P1.
-
----
-
-# 7. Rasterizer
-
-The rasterizer is fixed-function hardware.
-
-Three edge equations:
-
-\[
-E_i(x,y)=A_ix+B_iy+C_i
-\]
-
-determine triangle coverage.
-
-Walking right:
-
-\[
-E(x+1,y)=E(x,y)+A
-\]
-
-Walking downward:
-
-\[
-E(x,y+1)=E(x,y)+B
-\]
-
-So the inner loop is overwhelmingly adds and compares.
-
-Implement the **top-left fill rule** correctly.
-
-That gives deterministic shared edges without holes or double-filling.
-
-Target:
-
-> Rasterizer should be capable of generating a candidate fragment every GPU cycle whenever the downstream pipeline can accept one.
-
-We may not *consume* one per cycle yet.
-
-That's okay.
-
-`ready/valid` backpressure lets the shader pipeline stall it.
-
----
-
-# 8. Perspective-correct interpolation
-
-This is one thing I now want in P1 rather than postponing.
-
-We're claiming we're learning real graphics architecture.
-
-So let's learn this properly.
-
-At vertices, calculate:
-
-\[
-q=\frac{1}{w}
-\]
-
-and:
-
-\[
-u'=u q
-\]
-
-\[
-v'=v q
-\]
-
-Rasterization linearly interpolates:
-
-\[
-q,\quad u',\quad v'
-\]
-
-Then each fragment reconstructs:
-
-\[
-u=\frac{u'}{q}
-\]
-
-\[
-v=\frac{v'}{q}
-\]
-
-That's how we avoid obvious affine texture warping.
-
-We can use a small reciprocal lookup table, normalization and optional refinement rather than a giant generic divider.
-
-Normals can initially use ordinary interpolation and normalization approximation. We don't need mathematical perfection everywhere simultaneously.
-
----
-
-# 9. Texture unit
-
-A **real texture unit**, not a lookup hidden inside the pineapple logic.
-
-P1:
+The primitive assembler consumes three processed vertices and computes the
+signed screen-space area:
 
 ```text
-1 texture
-256 × 256
-RGB444
-nearest-neighbor filtering
-clamp or wrap addressing
+A = (x1−x0)(y2−y0) − (y1−y0)(x2−x0)
 ```
 
-`TEX2D` sends:
+The sign drives backface culling; the magnitude feeds barycentric
+interpolation. Requirements:
 
-```text
-u,v
-```
+- Triangle-list topology only. No strips, fans, lines, or patches in P1.
+- Triangle bounding boxes are clamped to the viewport; fully offscreen
+  geometry is discarded.
+- Full homogeneous near-plane clipping is deferred. The demo camera is
+  constrained to never intersect the near plane.
 
-and receives:
+## 9. Rasterizer
 
-```text
-r,g,b,a
-```
+Fixed-function coverage hardware implementing three edge equations
+`E_i(x,y) = A_i·x + B_i·y + C_i`, evaluated incrementally
+(`E(x+1,y) = E(x,y)+A`, `E(x,y+1) = E(x,y)+B`) so the inner loop is adds
+and compares. The **top-left fill rule** is mandatory: shared edges fill
+exactly once, with no holes and no double coverage.
 
-The alpha component can simply return 1 for now.
+Throughput target: one candidate fragment per GPU cycle whenever the
+downstream pipeline can accept it. `ready/valid` backpressure may stall the
+rasterizer; consumption below generation rate is acceptable in P1.
 
-Because texture memory is read-only during rendering, we can pack RGB444 texels efficiently into BRAM. This is much easier than packing writable framebuffers.
+## 10. Perspective-correct interpolation
 
-Later:
+Required in P1. Per vertex, the pipeline computes `q = 1/w` and premultiplied
+`u' = u·q`, `v' = v·q`; the rasterizer interpolates `q, u', v'` linearly and
+each fragment reconstructs `u = u'/q`, `v = v'/q`. Reciprocals use a small
+lookup/normalization/refinement path — not a general divider per lane.
+Normals use plain linear interpolation (approximation documented in
+[fixed point](fixed_point.md)).
 
-```text
-nearest
-   ↓
-bilinear
-   ↓
-mipmaps
-   ↓
-texture cache
-```
+## 11. Texture unit
 
-becomes a beautiful progression of actual GPU architecture work.
+A real texture unit addressable only through `TEX2D`:
 
----
+- P1 configuration: one 256×256 RGB444 texture, nearest-neighbor filtering,
+  clamp or wrap addressing.
+- `TEX2D` consumes `(u, v)` and returns `(r, g, b, a)`; alpha returns 1.
+- Texture memory is read-only during rendering and may be packed densely
+  into BRAM (unlike writable framebuffers).
 
-# 10. Fragment shader
+Upgrade path (post-P1, in order): bilinear → mipmaps → texture cache.
 
-A default pineapple shader might be:
+## 12. Fragment shader
+
+Reference pineapple program (diffuse + ambient):
 
 ```asm
 TEX2D r4, rUV
@@ -538,34 +280,16 @@ OUT   r6
 END
 ```
 
-But nothing about the fragment processor knows that's the pineapple shader.
+The fragment processor shall not depend on any particular program. The
+showcase ships multiple fragment programs (textured diffuse, normal
+visualization, depth visualization, toon, UV visualization, unlit texture),
+selectable at runtime — at least one selection shall visibly alter the image
+without any change to the graphics pipeline RTL.
 
-We should eventually include several shader programs:
+## 13. Depth pipeline
 
-```text
-textured diffuse
-normal visualization
-depth visualization
-toon shading
-UV visualization
-unlit texture
-```
-
-Pressing center could cycle them.
-
-That would actually make a fantastic demo of programmability.
-
----
-
-# 11. Depth pipeline
-
-Every fragment gets an interpolated depth.
-
-P1 uses:
-
-**16-bit unsigned Z.**
-
-We should perform early depth testing before expensive fragment work whenever possible:
+Every fragment carries an interpolated depth. P1 uses **16-bit unsigned Z**
+with early depth testing before fragment shading:
 
 ```text
 fragment
@@ -584,23 +308,16 @@ compare
      Z write
 ```
 
-Because the first architecture only processes a small number of fragments concurrently, we can avoid the complicated depth hazards that appear once many fragments are in flight.
+P1 processes few fragments concurrently, so multi-fragment depth hazards are
+out of scope; the architecture shall leave room for later pipelining.
 
-Again: the architecture leaves room to pipeline later.
+## 14. Commands and host boundary
 
----
+The board-side demo controller shall control the GPU **exclusively through
+the PineBus host interface**. Direct access from demo logic into GPU
+internals is prohibited.
 
-# 12. Commands and host boundary
-
-This is another thing I want Astra to get right from day one.
-
-The board demo must **not directly reach inside GPU modules**.
-
-It controls Pineapple through a host interface.
-
-Call it `PineBus`.
-
-Very simple:
+PineBus signals:
 
 ```text
 addr[15:0]
@@ -612,7 +329,7 @@ valid
 ready
 ```
 
-Registers expose things such as:
+Exposed registers (see [registers](registers.md) for the address map):
 
 ```text
 STATUS
@@ -630,109 +347,38 @@ TRIANGLE_COUNTER
 FRAGMENT_COUNTER
 ```
 
-Commands include at minimum:
+Minimum command set: `CLEAR`, `DRAW_INDEXED`, `PRESENT`.
 
-```text
-CLEAR
-DRAW_INDEXED
-PRESENT
-```
+The demo FSM is the first PineBus host. Later hosts (RISC-V, ESP32,
+USB bridge, PCIe) shall replace it without changes to the graphics
+architecture.
 
-The board-side demo controller is simply the first PineBus host.
+## 15. No CPU in P1
 
-Later:
+No ESP32 or RISC-V softcore in P1. Firmware, buses, booting, and toolchain
+integration teach nothing about GPU architecture and are excluded.
+Camera-matrix construction and button interpretation live in small
+finite-state machines (`camera_controller`, `demo_host`) outside the GPU.
 
-```text
-demo FSM
-   ↓
-RISC-V
-   ↓
-ESP32
-   ↓
-USB bridge
-   ↓
-PCIe host
-```
+## 16. Buttons
 
-could replace it without touching the graphics architecture.
+Input reuses the proven five-button keypad: two-flop synchronization,
+debounce, one-shot presses, arrow-key autorepeat (center never repeats).
+Physical mapping: center N17, up M18, down P18, left P17, right M17.
 
----
+| Input | Action |
+|---|---|
+| LEFT / RIGHT | orbit yaw − / + |
+| UP / DOWN | orbit pitch + / − |
+| CENTER tap | cycle shader / render mode |
+| CENTER + UP / DOWN | zoom in / out |
 
-# 13. No CPU in P1
+MVP regeneration (sine/cosine ROM + matrix-builder FSM) belongs to the demo
+host, not the GPU core.
 
-I specifically **do not want an ESP32 or RISC-V softcore right now**.
+## 17. Asset pipeline
 
-That was useful when we were thinking primarily about future discrete replacement.
-
-It's wrong for the current goal.
-
-A CPU introduces:
-
-firmware, buses, booting, compiler concerns and integration work that teach us almost nothing about how GPUs work.
-
-Instead:
-
-```text
-camera_controller.v
-demo_host.v
-```
-
-are tiny finite-state machines outside the GPU.
-
-They update uniforms and submit the same commands a future CPU would.
-
-The GPU is therefore a clean accelerator.
-
----
-
-# 14. Buttons
-
-Tomato already has exactly the input behavior we need.
-
-Its `keypad.v` synchronizes and debounces all five Nexys buttons, produces one-shot presses, and already supports arrow-key autorepeat. The physical mappings are also known: center N17, up M18, down P18, left P17 and right M17. :chatgpt-content-reference{index="5"}
-
-Use it.
-
-For Pineapple:
-
-```text
-LEFT     yaw -
-RIGHT    yaw +
-UP       pitch +
-DOWN     pitch -
-
-CENTER tap:
-    cycle shader/render mode
-
-CENTER + UP:
-    zoom in
-
-CENTER + DOWN:
-    zoom out
-```
-
-A small sine/cosine ROM and matrix-builder FSM can regenerate the MVP uniform once per frame.
-
-This logic belongs in the **demo host**, not GPU core.
-
----
-
-# 15. Asset pipeline
-
-Astra should also create:
-
-```text
-tools/pinepack.py
-```
-
-Pinepack takes something like:
-
-```text
-pineapple.obj
-pineapple.ppm/png
-```
-
-and emits:
+`tools/pinepack.py` converts `pineapple.obj` + texture inputs into:
 
 ```text
 vertices.mem
@@ -741,53 +387,24 @@ texture.mem
 asset.json
 ```
 
-The initial implementation may use `$readmemh()`.
+Initial implementations may use `$readmemh()`, which ties a mesh to the
+bitstream build. This is accepted for P1: generality is judged by whether
+`pinepack cube.obj`, `pinepack pineapple.obj`, and `pinepack teapot.obj`
+all produce legal GPU input with no RTL edits — not by runtime upload.
+Serial runtime loaders are post-P1 work and shall not gate graphics
+architecture.
 
-That means changing the model requires rebuilding the bitstream in P1. **I am okay with that.**
+## 18. Showcase asset
 
-Why?
+Initial target: ≈2,000 unique vertices, ≈4,000 triangles, 256×256 texture.
+Smooth vertex normals and texturing contribute more perceived detail than
+raw triangle count; polygon budget grows only in response to measured
+bottlenecks. The distributed asset shall be CC0 or equivalently
+open-licensed.
 
-Because generality comes from the architecture, not necessarily runtime upload on version one.
+## 19. Reused infrastructure
 
-The important thing is:
-
-```text
-pinepack cube.obj
-pinepack pineapple.obj
-pinepack teapot.obj
-```
-
-all produce legal GPU input without editing a line of RTL.
-
-Runtime UART loading can come afterward.
-
-Do not make serial loaders a prerequisite for learning graphics architecture.
-
----
-
-# 16. The showcase pineapple
-
-I would target approximately:
-
-**2,000 unique vertices / 4,000 triangles / 256×256 texture** initially.
-
-Don't obsess over polygon count.
-
-Smooth vertex normals and the texture will contribute vastly more perceived detail than blindly multiplying triangles.
-
-If this looks insufficient, then we solve the actual measured bottleneck rather than guessing today.
-
-And the final model should ideally be a proper CC0/open-licensed asset that we can distribute in the repository.
-
----
-
-# 17. What we reuse from Tomato
-
-Astra should inspect Tomato rather than inventing these systems again.
-
-The specific references are:
-
-| Pineapple need | Tomato reference |
+| Need | Reference |
 |---|---|
 | FPGA target | `hardware/fpga/core/` |
 | Build infrastructure | `hardware/fpga/common.mk` |
@@ -798,33 +415,16 @@ The specific references are:
 | TFP410 output register/ODDR | `hardware/fpga/core/rtl/board/dvi_out.v` |
 | Five-button input | `hardware/fpga/core/rtl/board/keypad.v` |
 
-The current Tomato path already sends 12-bit RGB and sync through the JC/JD TFP410 PMOD and generates the forwarded clock using an ODDR; that should be reused essentially unchanged. :chatgpt-content-reference{index="6"}
+The display path sends 12-bit RGB plus sync through the JC/JD TFP410 PMOD
+with the pixel clock forwarded via ODDR; P1 reuses this arrangement. The
+shared build flow targets `xc7a100tcsg324-1` and programs via
+`openFPGALoader -b nexys_a7_100`.
 
-And the existing common build system already targets `xc7a100tcsg324-1` and programs it using:
+Not reused wholesale: the text/tile renderer. P1 requires its own
+framebuffer scanout (`gpu_scanout`): timing and board interface are reused,
+the renderer is not.
 
-```text
-openFPGALoader -b nexys_a7_100
-```
-
-so Pineapple should inherit that rather than creating another FPGA environment. :chatgpt-content-reference{index="7"}
-
-The one thing **not** to copy wholesale is Tomato's `videoout.v`, because that is a text/tile renderer.
-
-Pineapple needs its own:
-
-```text
-gpu_scanout.v
-```
-
-that reads a pixel framebuffer.
-
-Reuse the **timing and board interface**, not the text renderer.
-
----
-
-# 18. Repository architecture
-
-I would tell Astra to build this hierarchy:
+## 20. Repository layout
 
 ```text
 pineapple/
@@ -901,33 +501,18 @@ pineapple/
     └── nexys.xdc
 ```
 
-And critically:
+Discipline: **`rtl/gpu/` contains zero board-specific pin knowledge.**
+Board harness (clocks, buttons, display, pins) lives under `rtl/board/`;
+the GPU core exposes interfaces only.
 
-**`rtl/gpu/` must contain zero board-specific pin knowledge.**
+## 21. Verification
 
-That discipline worked extremely well in Tomato: its machine core exposes interfaces, while clocks, buttons, display and pins live under the board harness. :chatgpt-content-reference{index="8"}
-
-Do the same thing here.
-
----
-
-# 19. Verification is part of the GPU
-
-Before Astra writes the full RTL, it should write:
-
-```text
-reference_renderer.py
-```
-
-That renderer is **not** a pretty conventional floating-point renderer.
-
-It emulates Pineapple's exact rules:
-
-same fixed-point widths, same rounding, same edge equations, same top-left rule, same depth quantization, same texture coordinate precision, same shader ISA.
-
-Then we can render a scene in Python and RTL and compare output CRCs.
-
-That lets us debug statements like:
+Verification is part of the GPU. `tools/reference_renderer.py` is not a
+conventional floating-point renderer: it emulates the exact P1 rules —
+fixed-point widths, rounding, edge equations, top-left rule, depth
+quantization, texture-coordinate precision, shader ISA — in integer
+arithmetic. Scene renders in Python and in RTL shall be compared by output
+CRC:
 
 ```text
 expected framebuffer CRC = E48A712C
@@ -936,15 +521,12 @@ RTL framebuffer CRC      = E48A712C
 PASS
 ```
 
-rather than staring at a broken pineapple and wondering which of fifteen pipeline stages is wrong.
+This procedure is mandatory: it isolates pipeline-stage defects that are
+invisible in a final broken framebuffer.
 
-This is mandatory.
+## 22. Performance counters
 
----
-
-# 20. Performance counters
-
-The final hardware should expose at least:
+The hardware shall expose, at minimum:
 
 ```text
 frames
@@ -965,99 +547,77 @@ texture requests
 shader instructions executed
 ```
 
-Then later we can ask actual GPU questions:
+These counters exist so frame-rate regressions can be attributed
+(geometry-bound, fragment-bound, overdraw, shader length) rather than
+guessed.
 
-Why did FPS fall?
+## 23. Implementation order
 
-Geometry bound?
+The ten stages below are cumulative review gates. Each requires passing
+Icarus tests; hardware-facing stages additionally require synthesis. No
+stage may bury basic correctness under a new subsystem.
 
-Fragment bound?
+1. **Pineapple skeleton.** Repository/build structure, DVI/constraints/
+   toolchain reuse, 640×480 test pattern, keypad reuse, `make fpga` +
+   `make program`.
+2. **GPU framebuffer.** 320×180 double-buffered render targets, 2× scanout
+   into centered 640×360, clear engine, `PRESENT`, front/back swap on
+   vertical blank only.
+3. **Golden model + rasterizer.** Bit-accurate Python reference renderer and
+   RTL edge-function rasterizer. Solid flat triangles shall match the
+   reference exactly.
+4. **Geometry pipeline.** Indexed vertex fetch, programmable Pine shader
+   core, vertex shader, viewport transform, backface culling, triangle
+   setup. D-pad-rotated cube render.
+5. **Depth.** 16-bit Z interpolation/test/write. Intersecting geometry
+   occludes correctly and matches the reference renderer.
+6. **Perspective interpolation + textures.** `1/w`, perspective-correct UVs,
+   reciprocal path, texture RAM, `TEX2D`. Textured cube render.
+7. **Fragment shader.** Common Pine shader core as programmable fragment
+   stage. Shader programs replaceable independently of GPU RTL.
+8. **Asset toolchain.** `pinepack.py`, indexed mesh format, texture packer,
+   Pine shader assembler, initial pineapple asset.
+9. **Pineapple showcase.** Detailed textured pineapple, smooth normals,
+   directional/ambient light, button orbit/zoom, runtime shader-mode
+   cycling, stable double-buffered animation.
+10. **Profiling and optimization.** Performance counters, measured
+    bottlenecks, pipelining/parallelization only as measurements justify.
+    Showcase target ≈30 fps; premature multi-rasterizer work is prohibited.
 
-Too much overdraw?
+## 24. Definition of P1 complete
 
-Shader too long?
-
-That's where this starts becoming the learning experience you're after.
-
----
-
-# 21. The PR sequence I would give Astra
-
-Do **not** ask Astra to implement the entire architecture in one giant PR. I would enforce this order:
-
-1. **PR 1 — Pineapple skeleton.** Create repository/build structure, reuse Tomato's DVI/constraints/toolchain, produce a 640×480 test pattern, reuse keypad, and prove `make fpga` + `make program`.
-2. **PR 2 — GPU framebuffer.** Create 320×180 double-buffered render targets, 2× scanout into centered 640×360, clear engine, `PRESENT`, and front/back swapping only at vertical blank.
-3. **PR 3 — Golden model + rasterizer.** Create Python bit-accurate reference renderer and RTL edge-function triangle rasterizer. Solid flat triangle must match the reference exactly.
-4. **PR 4 — Geometry pipeline.** Implement indexed vertex fetch, programmable Pine shader core, vertex shader, viewport transform, backface culling and triangle setup. Render a joystick/D-pad-rotated cube.
-5. **PR 5 — Depth.** Add 16-bit Z interpolation/test/write. Intersecting cubes/triangles must occlude correctly and match the reference renderer.
-6. **PR 6 — Perspective interpolation + textures.** Add \(1/w\), perspective-correct UVs, reciprocal path, texture RAM and `TEX2D`. Render a textured cube.
-7. **PR 7 — Fragment shader.** Use the common Pine shader core as a programmable fragment stage. Shader programs must be replaceable independently of GPU RTL.
-8. **PR 8 — Asset toolchain.** `pinepack.py`, indexed mesh format, texture packer, Pine shader assembler, and initial pineapple asset.
-9. **PR 9 — Pineapple showcase.** Detailed textured pineapple, smooth normals, directional/ambient light, button-controlled orbit/zoom, runtime shader-mode cycling, stable double-buffered animation.
-10. **PR 10 — Profiling and optimization.** Add performance counters, measure bottlenecks, then pipeline/parallelize only what measurements justify. Target a showcase frame rate around 30 FPS rather than prematurely building multiple rasterizers.
-
-Every PR must pass Icarus tests.
-
-Every hardware-facing PR should still synthesize.
-
-No PR is allowed to bury basic correctness under a giant new subsystem.
-
----
-
-# 22. The definition of P1 complete
-
-I'm setting a higher bar now than simply “pineapple appears.”
-
-Pineapple GPU P1 is finished when you can power the Nexys A7 and demonstrate:
+P1 is complete when the Nexys A7 demonstrates, from power-on:
 
 ```text
-                  Pineapple GPU
+                   Pineapple GPU
 
-       custom programmable vertex processor
-                       │
-            hardware rasterizer
-                       │
-         perspective interpolation
-                       │
-             texture sampling
-                       │
-       programmable fragment processor
-                       │
-                  Z-buffer
-                       │
-             double framebuffer
-                       │
-                     HDMI
+        custom programmable vertex processor
+                        │
+             hardware rasterizer
+                        │
+          perspective interpolation
+                        │
+              texture sampling
+                        │
+        programmable fragment processor
+                        │
+                   Z-buffer
+                        │
+              double framebuffer
+                        │
+                      HDMI
 ```
 
-A textured, lit 3D pineapple appears.
+- A textured, lit 3D pineapple is displayed.
+- LEFT/RIGHT orbit horizontally; UP/DOWN orbit vertically.
+- CENTER + UP/DOWN zoom; CENTER taps change the shader.
+- At least one shader change visibly alters the image **without changing
+  the graphics pipeline RTL**.
+- A second asset loads through the same tooling with no GPU RTL changes,
+  proving the architecture is not hardcoded for the pineapple.
 
-You press:
-
-**left/right** — orbit horizontally.
-
-**up/down** — orbit vertically.
-
-**center + up/down** — zoom.
-
-**center** — change shader.
-
-And at least one shader change must visibly alter the image **without changing the graphics pipeline RTL**.
-
-Then load another asset through the same tooling and demonstrate that the architecture wasn't hardcoded for a pineapple.
-
-At that point I would be entirely comfortable with the sentence:
-
-> **“I built a programmable 3D GPU from scratch on an FPGA.”**
-
-Not “graphics demo.”
-
-Not “FPGA renderer.”
-
-A small GPU.
-
-And after that is when the project gets genuinely fun, because we can start adding the things real GPU architects spend their careers worrying about: multiple shader lanes, multithreading, texture caches, bilinear filtering, mipmaps, tiled rendering, memory bandwidth, early-Z hierarchies, blending, branching/divergence, eventually external VRAM—and perhaps much later replacing FPGA subsystems with physical chips.
-
-But **none of those are allowed to prevent Pineapple P1 from existing first.**
-
-That is the specification I would hand Astra.
+At that point the claim "built a programmable 3D GPU from scratch on an
+FPGA" holds. Post-P1 work — shader lanes, multithreading, texture caches,
+bilinear filtering, mipmaps, tiled rendering, bandwidth management, early-Z
+hierarchies, blending, branching/divergence, external VRAM — is explicitly
+out of scope and shall not delay P1.

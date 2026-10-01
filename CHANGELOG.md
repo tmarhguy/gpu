@@ -5,6 +5,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+- Runtime shader upload over USB-UART (115200 8N1, `RsRx` pin C4):
+  `rtl/board/uart_rx.v` receiver, `rtl/gpu/shader_loader.v` with staged,
+  checksummed, atomic commit between frames, and `tools/pineload.py`
+  sender. New `.pine` shaders take effect on the next frame with no
+  resynthesis; see `docs/shader_upload.md`. `tb_uart` covers bytes,
+  framing, staging, idle gating, rejection paths, and a wired upload.
+- PineBus read `0x4C`: committed-upload counter. `demo_host` takes a
+  `hold` input so uploads freeze the command stream without double-issue.
+
 ## [0.3.0] - 2026-09-26
 
 Second asset on silicon with unchanged GPU RTL (`rtl/gpu/` untouched).

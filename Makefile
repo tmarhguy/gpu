@@ -7,7 +7,7 @@ FREQ_MHZ := 50
 # nextpnr-xilinx cannot reliably route the mapped DSP carry ports on this install.
 SYNTH_OPTS := -nodsp
 
-.PHONY: test verify clean fpga-cube program-cube synth-cube
+.PHONY: test verify clean fpga-cube program-cube synth-cube docs docs-clean docs-open
 fpga-cube:
 	$(MAKE) fpga TOP=cube_top
 program-cube:
@@ -63,5 +63,17 @@ fpga program synth:
 endif
 clean:
 	rm -rf build
+
+# Technical manual (Asciidoctor, no Node/npm). Output: build/docs/index.html
+docs:
+	./scripts/build-docs.sh
+
+docs-clean:
+	rm -rf build/docs
+
+docs-open: docs
+	@if command -v open >/dev/null 2>&1; then open build/docs/index.html; \
+	elif command -v xdg-open >/dev/null 2>&1; then xdg-open build/docs/index.html; \
+	else echo 'Built build/docs/index.html (no open/xdg-open found)'; fi
 
 $(JSON): Makefile $(wildcard assets/packed/*.mem assets/packed/*.vh assets/cube/*.mem assets/cube/*.vh) assets/program.mem assets/camera.mem

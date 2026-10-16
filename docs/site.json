@@ -1,0 +1,28 @@
+{
+  "name": "Pineapple GPU",
+  "label": "Documentation",
+  "title": "A small 3D graphics processor",
+  "description": "A programmable 3D graphics processor on a Digilent Nexys A7 FPGA board. It draws a 320 by 180 picture out HDMI.",
+  "url": "",
+  "image": "",
+  "about": "#about",
+  "repository": "https://github.com/tmarhguy/gpu",
+  "website": "",
+  "source": "https://github.com/tmarhguy/gpu/blob/main/docs/index.adoc",
+  "groups": {
+    "0": "Documentation",
+    "11": "Author"
+  },
+  "branch": "main",
+  "hero": {
+    "image": "images/pineapple-demo.gif",
+    "alt": "Pineapple GPU demo footage from the Nexys A7-100T",
+    "caption": "Live demo \u2014 Pineapple GPU P1 on the Nexys A7-100T. Click to expand."
+  },
+  "accent": "#ca8a04",
+  "accentDark": "#fde047",
+  "nested": [
+    "engineering-log"
+  ],
+  "logs": "log"
+}

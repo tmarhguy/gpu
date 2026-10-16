@@ -1,0 +1,20 @@
+{
+  "title": "Post-route resources",
+  "subtitle": "Pineapple GPU v0.2.0 on the Artix-7 100T",
+  "ylabel": "percent of part",
+  "categories": [
+    "LUT",
+    "RAMB18",
+    "RAMB36"
+  ],
+  "series": [
+    {
+      "name": "Used",
+      "values": [
+        22,
+        42,
+        41
+      ]
+    }
+  ]
+}

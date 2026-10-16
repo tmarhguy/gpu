@@ -52,6 +52,12 @@ tables cost the rest.
 Measured v0.2.0: *22% LUT, 42% RAMB18, 41% RAMB36* of the 100T's 135 RAMB36.
 Any capacity claim must cite a post-route report, never a bit total.
 
+.Post-route share of the 100T
+image::resources.svg[LUT, RAMB18, and RAMB36 utilization for Pineapple GPU v0.2.0,width=800]
+
+.Achieved gpu_clk against the 50 MHz target
+image::clocks.svg[Post-route gpu_clk for the pineapple, the rebuild, and the cube,width=800]
+
 === Timing (measured post-route)
 
 * Pineapple `make fpga`: `gpu_clk` *50.36 MHz* vs 50 MHz target;

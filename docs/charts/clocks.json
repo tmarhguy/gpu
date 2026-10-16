@@ -1,0 +1,28 @@
+{
+  "title": "Post-route gpu_clk",
+  "subtitle": "Achieved frequency against the 50 MHz target",
+  "ylabel": "MHz",
+  "categories": [
+    "Pineapple",
+    "Rebuild",
+    "Cube"
+  ],
+  "series": [
+    {
+      "name": "Achieved",
+      "values": [
+        50.36,
+        55.43,
+        60.88
+      ]
+    },
+    {
+      "name": "Target",
+      "values": [
+        50,
+        50,
+        50
+      ]
+    }
+  ]
+}

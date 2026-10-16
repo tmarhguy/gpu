@@ -51,8 +51,12 @@ vectors.
 image::pineapple-on-silicon.png[Lit pineapple on silicon,align="center"]
 
 Logs: `docs/validation/icarus.log`, `docs/validation/fpga-summary.log`.
-Photos: `docs/validation/hardware-pineapple.jpg`,
-`docs/validation/hardware-cube.jpg`.
+
+.Pineapple on the HDMI capture
+image::hardware-pineapple.jpg[Photograph of the pineapple demo on hardware,align=center]
+
+.Cube demo on the same board
+image::hardware-cube.jpg[Photograph of the cube demo on hardware,align=center]
 
 === Bench sessions A1/A2 — pending
 

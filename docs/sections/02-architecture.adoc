@@ -11,6 +11,9 @@ shader → primitive assembly, cull, and setup → top-left edge rasterizer →
 perspective interpolation → early depth test → programmable fragment shader
 and texture unit → RGB444 back buffer → vblank presentation → board scanout.
 
+.Stages from the vertex shader through scanout
+image::shader-pipeline.svg[Pineapple shader pipeline from vertex shading through scanout,width=800]
+
 `rtl/gpu/` holds the graphics processor and never knows board pins or asset
 identity.
 `rtl/board/` owns clocks, buttons, timing, and DVI pins.
@@ -23,11 +26,8 @@ All GPU logic runs on `gpu_clk` (50 MHz).
 All scanout logic runs on `pix_clk` (25 MHz).
 The only crossing is the framebuffer swap plus scanout read.
 
-[source,text]
-----
-NEXYS A7-100T (xc7a100tcsg324-1), 100 MHz E3 -+- div/2 -> gpu_clk 50 MHz (GPU, host, keypad, UART)
-                                               +- div/4 -> pix_clk 25 MHz (scanout, DVI, vblank)
-----
+.The 100 MHz oscillator on pin E3, divided by two and by four
+image::clock-domains.svg[Clock domains. 100 MHz on pin E3 divides by 2 to gpu_clk at 50 MHz and by 4 to pix_clk at 25 MHz.,width=800]
 
 === System map
 

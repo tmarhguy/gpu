@@ -1,0 +1,26 @@
+{
+  "title": "Shader pipeline",
+  "subtitle": "Pineapple GPU P1 on the Nexys A7",
+  "rows": [
+    [
+      "Vertex shader",
+      "Programmable core. New shaders upload over UART."
+    ],
+    [
+      "Primitive setup",
+      "Assembly, cull, and triangle setup."
+    ],
+    [
+      "Rasterizer",
+      "Top-left edge functions and perspective interpolation."
+    ],
+    [
+      "Fragment shader",
+      "Early depth test, then the same shader core."
+    ],
+    [
+      "Scanout",
+      "25 MHz pixel clock to DVI."
+    ]
+  ]
+}

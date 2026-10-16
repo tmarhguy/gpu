@@ -65,15 +65,34 @@ clean:
 	rm -rf build
 
 # Technical manual (Asciidoctor, no Node/npm). Output: build/docs/index.html
-docs:
-	./scripts/build-docs.sh
 
+
+
+$(JSON): Makefile $(wildcard assets/packed/*.mem assets/packed/*.vh assets/cube/*.mem assets/cube/*.vh) assets/program.mem assets/camera.mem
+
+# --- Static docs (Asciidoctor, sealion-style template) ---
+.PHONY: docs docs-clean docs-open docs-check docs-diagrams
+
+# Build the complete static documentation into build/docs/.
+docs:
+	bash scripts/build-docs.sh
+
+# Remove generated documentation.
 docs-clean:
 	rm -rf build/docs
 
+# Serve the built manual locally (requires `make docs` first).
+# Uses only the Python standard library; no npm or extra tooling.
 docs-open: docs
-	@if command -v open >/dev/null 2>&1; then open build/docs/index.html; \
-	elif command -v xdg-open >/dev/null 2>&1; then xdg-open build/docs/index.html; \
-	else echo 'Built build/docs/index.html (no open/xdg-open found)'; fi
+	python3 -m http.server --directory build/docs 8000
 
-$(JSON): Makefile $(wildcard assets/packed/*.mem assets/packed/*.vh assets/cube/*.mem assets/cube/*.vh) assets/program.mem assets/camera.mem
+# Regenerate lightweight SVG diagrams after editing docs/diagrams/*.json.
+docs-diagrams:
+	python3 scripts/render-docs-diagrams.py
+
+# The same static validation used in CI; no third-party Python packages.
+docs-check: docs
+	python3 scripts/render-docs-diagrams.py --check
+	python3 scripts/check-docs.py
+	python3 scripts/test-docs-template.py
+
